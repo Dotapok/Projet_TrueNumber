@@ -3,18 +3,18 @@
 import { Routes, Route } from "react-router-dom"
 
 // pages publiques
-import Acceuil from "./pages/public/acceuil"
+import Interface from "./pages/public/acceuil"
 
 // pages authentification
 import Connexion from "./pages/authentification/connexion"
 import Inscription from "./pages/authentification/inscription"
-import Profil from "./pages/authentification/interface"
+import Profil from "./pages/profil/interface"
 
 function App() {
   return (
     <Routes>
       {/* Routes publiques */}
-      <Route path="/" element={<Acceuil />} />
+      <Route path="/" element={<Interface />} />
 
       {/* Routes gestion profil et authentification */}
       <Route path="/connexion" element={<Connexion />} />
