@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://backendhighreference-production.up.railway.app/api';
+const API_BASE_URL = 'https://backend-truenumber.up.railway.app/api-docs/';
 
 interface ApiResponse<T = any> {
   success: boolean;
