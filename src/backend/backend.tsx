@@ -6,6 +6,40 @@ interface ApiResponse<T = any> {
   error?: string;
 }
 
+interface User {
+  _id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  role: 'user' | 'admin';
+  points: number;
+  createdAt: string;
+  bio?: string;
+}
+
+interface GameResult {
+  number: number;
+  result: 'win' | 'lose';
+  pointsChange: number;
+  newBalance: number;
+  createdAt: string;
+}
+
+interface GameResultComplet {
+  _id: string;
+  user: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+  };
+  number: number;
+  result: 'win' | 'lose';
+  pointsChange: number;
+  newBalance: number;
+  createdAt: string;
+}
+
 export const apiService = {
   async request<T>(endpoint: string, method: string, data?: any): Promise<ApiResponse<T>> {
     const url = `${API_BASE_URL}${endpoint}`;
@@ -13,10 +47,9 @@ export const apiService = {
       'Content-Type': 'application/json',
     };
 
-    // Gestion améliorée du token
     try {
       const token = localStorage.getItem('authToken');
-      if (token) {
+      if (token && endpoint !== '/auth/login') {  
         headers['Authorization'] = `Bearer ${token}`;
       }
 
@@ -27,10 +60,10 @@ export const apiService = {
         credentials: 'include',
       });
 
-      // Gestion des réponses non autorisées
+      // Pour le login, ne pas gérer les erreurs 401 spécialement
       if (response.status === 401) {
         localStorage.removeItem('authToken');
-        window.location.href = '/connexion';
+        localStorage.removeItem('user');
         return { success: false, error: 'Session expirée' };
       }
 
@@ -54,35 +87,25 @@ export const apiService = {
   },
 
   auth: {
-    async login(email: string, password: string): Promise<ApiResponse<{ token: string; user: any }>> {
+    async login(email: string, password: string): Promise<ApiResponse<{ token: string; user: User }>> {
       const response = await apiService.request<{
-        data: {
-          token: string;
-          user: {
-            _id: string;
-            firstName: string;
-            lastName: string;
-            email: string;
-          };
-        };
-        message: string;
-        statusCode: number;
-        success: boolean;
+        token: string;
+        user: User;
       }>('/auth/login', 'POST', { email, password });
 
-      if (response.success && response.data?.data?.token) {
-        localStorage.setItem('authToken', response.data.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.data.user));
+      if (response.success && response.data) {
+        console.log('Response structure:', response);
+        console.log('Response data:', response.data);
+        
+        // Accéder aux données correctement dans la structure de réponse
+        const loginData = response.data.data;
+        console.log('Login data:', loginData);
+        
+        localStorage.setItem('authToken', loginData.token);
+        localStorage.setItem('user', JSON.stringify(loginData.user));
       }
 
-      return {
-        success: response.success,
-        data: {
-          token: response.data?.data?.token,
-          user: response.data?.data?.user
-        },
-        error: response.success ? undefined : response.error
-      };
+      return response;
     },
 
     async register(userData: {
@@ -90,19 +113,14 @@ export const apiService = {
       lastName: string;
       email: string;
       password: string;
-    }): Promise<ApiResponse> {
+      phone: string;
+    }): Promise<ApiResponse<{ user: User }>> {
       return apiService.request('/auth/register', 'POST', userData);
     },
   },
 
   user: {
-    async getProfile(): Promise<ApiResponse<{
-      firstName: string;
-      lastName: string;
-      email: string;
-      createdAt: string;
-      bio?: string;
-    }>> {
+    async getProfile(): Promise<ApiResponse<User>> {
       return apiService.request('/users/me', 'GET');
     },
 
@@ -110,12 +128,54 @@ export const apiService = {
       firstName?: string;
       lastName?: string;
       bio?: string;
-    }): Promise<ApiResponse> {
+      phone?: string;
+    }): Promise<ApiResponse<User>> {
       return apiService.request('/users/me', 'PATCH', profileData);
     },
-    
-    async deleteProfile(): Promise<ApiResponse> {
-      return apiService.request('/users/me', 'DELETE');
+
+    // Game endpoints
+    async playGame(): Promise<ApiResponse<GameResult>> {
+      return apiService.request('/game/play', 'POST');
+    },
+
+    async getGameHistory(): Promise<ApiResponse<GameResult[]>> {
+      return apiService.request('/game/history', 'GET');
+    },
+  },
+
+  admin: {
+    async getAllUsers(): Promise<ApiResponse<User[]>> {
+      return apiService.request('/admin/users', 'GET');
+    },
+
+    async getAllGames(): Promise<ApiResponse<GameResultComplet[]>> {
+      return apiService.request('/admin/games', 'GET');
+    },
+
+    async createUser(userData: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      password: string;
+      phone: string;
+      role: 'user' | 'admin';
+    }): Promise<ApiResponse<User>> {
+      return apiService.request('/admin/users', 'POST', userData);
+    },
+
+    async updateUser(userId: string, userData: {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      phone?: string;
+      role?: 'user' | 'admin';
+      points?: number;
+    }): Promise<ApiResponse<User>> {
+      return apiService.request(`/admin/users/${userId}`, 'PATCH', userData);
+    },
+
+    async deleteUser(userId: string): Promise<ApiResponse> {
+      return apiService.request(`/admin/users/${userId}`, 'DELETE');
     },
   },
 };

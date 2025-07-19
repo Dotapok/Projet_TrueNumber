@@ -9,6 +9,7 @@ import Interface from "./pages/public/acceuil"
 import Connexion from "./pages/authentification/connexion"
 import Inscription from "./pages/authentification/inscription"
 import Profil from "./pages/profil/interface"
+import AdminPanel from "./pages/admin/adminPanel"
 
 function App() {
   return (
@@ -20,6 +21,9 @@ function App() {
       <Route path="/connexion" element={<Connexion />} />
       <Route path="/inscription" element={<Inscription />} />
       <Route path="/profil" element={<Profil />} />
+
+      {/* Route administration */}
+      <Route path="/admin" element={<AdminPanel />} />
     </Routes>
   )
 }

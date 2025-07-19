@@ -23,16 +23,19 @@ export default function Connexion() {
 
       if (response.success) {
         // Stockage des données utilisateur
-        const userData = response.data?.user;
+        const userData = response.data?.data.user;
         if (userData) {
           localStorage.setItem('user', JSON.stringify(userData));
+          
+          // Redirection en fonction du rôle
+          const redirectPath = userData.role === 'admin' ? '/admin' : '/profil';
+          
+          setNotification({
+            message: 'Connexion réussie! Redirection...',
+            type: 'success',
+          });
+          setTimeout(() => navigate(redirectPath), 2000);
         }
-        
-        setNotification({
-          message: 'Connexion réussie! Redirection...',
-          type: 'success',
-        });
-        setTimeout(() => navigate('/profil'), 2000);
       } else {
         setNotification({
           message: response.error || 'Échec de la connexion',
@@ -121,6 +124,11 @@ export default function Connexion() {
             S'inscrire
           </a>
         </p>
+        <div className="text-center mt-4">
+          <a href="/" className="text-indigo-600 hover:text-indigo-800">
+            Retour à l'accueil
+          </a>
+        </div>
       </div>
     </div>
   );
