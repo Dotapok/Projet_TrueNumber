@@ -1,4 +1,3 @@
-// interface.tsx
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../../backend/backend';
@@ -35,10 +34,7 @@ export default function Profil() {
 
   useEffect(() => {
     const fetchProfile = async () => {
-      console.log('Début du fetchProfile');
-      
       const token = localStorage.getItem('authToken');
-      console.log('Token:', token);
       
       if (!token) {
         setNotification({
@@ -50,15 +46,11 @@ export default function Profil() {
       }
 
       const savedUser = localStorage.getItem('user');
-      console.log('User data from localStorage:', savedUser);
       
       if (savedUser) {
         try {
-          // Sécuriser le parsing JSON
           if (typeof savedUser === 'string' && savedUser.trim() !== '') {
             const user = JSON.parse(savedUser);
-            console.log('User parsed:', user);
-            
             setProfile({
               _id: user._id,
               firstName: user.firstName,
@@ -76,8 +68,6 @@ export default function Profil() {
               bio: user.bio || '',
               phone: user.phone || ''
             });
-          } else {
-            console.warn('User data in localStorage is empty or invalid');
           }
         } catch (e) {
           console.error('Error parsing saved user', e);
@@ -89,12 +79,9 @@ export default function Profil() {
       }
 
       try {
-        console.log('Appel API getProfile');
         const { success, data, error } = await apiService.user.getProfile();
-        console.log('API Response:', { success, data, error });
         
         if (success && data) {
-          console.log('Profile data from API:', data);
           setProfile({
             _id: data.data._id,
             firstName: data.data.firstName,
@@ -113,20 +100,17 @@ export default function Profil() {
             phone: data.data.phone || ''
           });
         } else {
-          console.error('API Error:', error);
           setNotification({
             message: error || 'Erreur lors du chargement du profil',
             type: 'error'
           });
         }
       } catch (err) {
-        console.error('API Error:', err);
         setNotification({
           message: 'Erreur réseau lors du chargement du profil',
           type: 'error'
         });
       }
-      console.log('Profile state:', profile);
       setLoading(false);
     };
 
@@ -184,80 +168,79 @@ export default function Profil() {
         />
       )}
 
-      <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-6">
-        {/* Game section - prend plus de place */}
-        <div className="lg:w-2/3">
+      <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-4 md:gap-6">
+        <div className="w-full lg:w-2/3 order-2 lg:order-1">
           <TrueNumberGame />
         </div>
-        {/* Profil section - prend moins de place */}
-        <div className="lg:w-1/3">
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="text-2xl font-bold text-indigo-600">Mon Profil</h1>
+        
+        <div className="w-full lg:w-1/3 order-1 lg:order-2">
+          <div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-4 md:mb-0">
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-4 md:mb-6 space-y-2 sm:space-y-0">
+              <h1 className="text-xl md:text-2xl font-bold text-indigo-600">Mon Profil</h1>
               <button 
                 onClick={handleLogout}
-                className="px-4 py-2 text-indigo-600 hover:bg-indigo-50 rounded-md border border-indigo-600 transition-colors"
+                className="px-3 py-1 md:px-4 md:py-2 text-indigo-600 hover:bg-indigo-50 rounded-md border border-indigo-600 transition-colors text-sm md:text-base"
               >
                 Déconnexion
               </button>
             </div>
             
-            <h2 className="text-xl font-bold text-gray-800 mb-6">Informations</h2>
+            <h2 className="text-lg md:text-xl font-bold text-gray-800 mb-4 md:mb-6">Informations</h2>
             
-            <div className="grid grid-cols-1 gap-4 mb-6">
+            <div className="grid grid-cols-1 gap-3 md:gap-4 mb-4 md:mb-6">
               <div>
-                <label className="text-sm font-medium text-gray-500 mb-1 block">Prénom</label>
+                <label className="text-xs md:text-sm font-medium text-gray-500 mb-1 block">Prénom</label>
                 {isEditing ? (
                   <input
                     type="text"
                     name="firstName"
                     value={editData.firstName}
                     onChange={handleEditChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full px-3 py-1 md:px-4 md:py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm md:text-base"
                   />
                 ) : (
-                  <p className="text-gray-800 py-2">{profile.firstName}</p>
+                  <p className="text-gray-800 py-1 md:py-2 text-sm md:text-base">{profile.firstName}</p>
                 )}
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-500 mb-1 block">Nom</label>
+                <label className="text-xs md:text-sm font-medium text-gray-500 mb-1 block">Nom</label>
                 {isEditing ? (
                   <input
                     type="text"
                     name="lastName"
                     value={editData.lastName}
                     onChange={handleEditChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full px-3 py-1 md:px-4 md:py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm md:text-base"
                   />
                 ) : (
-                  <p className="text-gray-800 py-2">{profile.lastName}</p>
+                  <p className="text-gray-800 py-1 md:py-2 text-sm md:text-base">{profile.lastName}</p>
                 )}
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-500 mb-1 block">Email</label>
-                <p className="text-gray-800 py-2">{profile.email}</p>
+                <label className="text-xs md:text-sm font-medium text-gray-500 mb-1 block">Email</label>
+                <p className="text-gray-800 py-1 md:py-2 text-sm md:text-base">{profile.email}</p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-500 mb-1 block">Téléphone</label>
+                <label className="text-xs md:text-sm font-medium text-gray-500 mb-1 block">Téléphone</label>
                 {isEditing ? (
                   <input
                     type="text"
                     name="phone"
                     value={editData.phone}
                     onChange={handleEditChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full px-3 py-1 md:px-4 md:py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm md:text-base"
                   />
                 ) : (
-                  <p className="text-gray-800 py-2">{profile.phone}</p>
+                  <p className="text-gray-800 py-1 md:py-2 text-sm md:text-base">{profile.phone}</p>
                 )}
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-500 mb-1 block">Date d'inscription</label>
-                <p className="text-gray-800 py-2">
+                <label className="text-xs md:text-sm font-medium text-gray-500 mb-1 block">Date d'inscription</label>
+                <p className="text-gray-800 py-1 md:py-2 text-sm md:text-base">
                   {new Date(profile.createdAt).toLocaleDateString('fr-FR')}
                 </p>
               </div>

@@ -72,10 +72,10 @@ export default function Inscription() {
         />
       )}
 
-      <div className="w-full max-w-md bg-white rounded-lg shadow-md p-8">
-        <h1 className="text-2xl font-bold text-center text-indigo-600 mb-8">Inscription</h1>
+      <div className="w-full max-w-md bg-white rounded-lg shadow-md p-6 md:p-8">
+        <h1 className="text-xl md:text-2xl font-bold text-center text-indigo-600 mb-6 md:mb-8">Inscription</h1>
         
-        <form className="space-y-6" onSubmit={handleSubmit}>
+        <form className="space-y-4 md:space-y-6" onSubmit={handleSubmit}>
           <div>
             <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
               Prénom
@@ -85,7 +85,7 @@ export default function Inscription() {
               id="firstName"
               value={formData.firstName}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm md:text-base"
               placeholder="Jean"
               required
             />
@@ -100,7 +100,7 @@ export default function Inscription() {
               id="lastName"
               value={formData.lastName}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm md:text-base"
               placeholder="Dupont"
               required
             />
@@ -115,7 +115,7 @@ export default function Inscription() {
               id="phone"
               value={formData.phone}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm md:text-base"
               placeholder="06 12 34 56 78"
               required
             />
@@ -130,7 +130,7 @@ export default function Inscription() {
               id="email"
               value={formData.email}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm md:text-base"
               placeholder="jean.dupont@example.com"
               required
             />
@@ -145,7 +145,7 @@ export default function Inscription() {
               id="password"
               value={formData.password}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm md:text-base"
               required
             />
           </div>
@@ -159,7 +159,7 @@ export default function Inscription() {
               id="confirmPassword"
               value={formData.confirmPassword}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm md:text-base"
               required
             />
           </div>
@@ -167,22 +167,22 @@ export default function Inscription() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
+            className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 text-sm md:text-base"
           >
             {loading ? 'Inscription en cours...' : "S'inscrire"}
           </button>
 
           <div className="text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-xs md:text-sm text-gray-600">
               Déjà un compte ?{' '}
-              <a href="/connexion" className="text-indigo-600 hover:text-indigo-700">
+              <a href="/connexion" className="font-medium text-indigo-600 hover:text-indigo-700">
                 Se connecter
               </a>
             </p>
           </div>
         </form>
-        <div className="text-center mt-4">
-          <a href="/" className="text-indigo-600 hover:text-indigo-800">
+        <div className="text-center mt-3 md:mt-4">
+          <a href="/" className="text-sm text-indigo-600 hover:text-indigo-800">
             Retour à l'accueil
           </a>
         </div>
