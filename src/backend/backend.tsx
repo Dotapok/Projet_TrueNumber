@@ -1,4 +1,5 @@
 const API_BASE_URL = 'https://backend-truenumber.up.railway.app/api';
+//const API_BASE_URL = 'http://localhost:5000/api';
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -37,6 +38,19 @@ interface GameResultComplet {
   result: 'win' | 'lose';
   pointsChange: number;
   newBalance: number;
+  createdAt: string;
+}
+
+interface MultiplayerGame {
+  _id: string;
+  creator: User;
+  opponent?: User;
+  stake: number;
+  timeLimit: number;
+  status: 'waiting' | 'playing' | 'finished';
+  creatorNumber?: number;
+  opponentNumber?: number;
+  winner?: string;
   createdAt: string;
 }
 
@@ -177,5 +191,27 @@ export const apiService = {
     async deleteUser(userId: string): Promise<ApiResponse> {
       return apiService.request(`/admin/users/${userId}`, 'DELETE');
     },
+  },
+
+  game: {
+    async createMultiplayerGame(stake: number, timeLimit: number): Promise<ApiResponse<MultiplayerGame>> {
+      return apiService.request('/game/multiplayer', 'POST', { stake, timeLimit });
+    },
+
+    async listWaitingGames(): Promise<ApiResponse<MultiplayerGame[]>> {
+      return apiService.request('/game/multiplayer/waiting', 'GET');
+    },
+
+    async joinMultiplayerGame(gameId: string): Promise<ApiResponse<MultiplayerGame>> {
+      return apiService.request(`/game/multiplayer/join/${gameId}`, 'POST');
+    },
+
+    async playMultiplayerTurn(gameId: string, number: number): Promise<ApiResponse<MultiplayerGame>> {
+      return apiService.request(`/game/multiplayer/play/${gameId}`, 'POST', { number });
+    },
+
+    async getMultiplayerGame(gameId: string): Promise<ApiResponse<MultiplayerGame>> {
+      return apiService.request(`/game/multiplayer/${gameId}`, 'GET');
+    }
   },
 };
