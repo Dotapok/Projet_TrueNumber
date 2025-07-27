@@ -33,6 +33,8 @@ export default function TrueNumberGame() {
   const [points, setPoints] = useState<number>(0);
   const [gameHistory, setGameHistory] = useState<GameHistoryItem[]>([]);
   const [isMultiplayer, setIsMultiplayer] = useState(false);
+  const [generatingNumber, setGeneratingNumber] = useState<number | null>(null);
+  const [showResult, setShowResult] = useState(false);
 
   const handleApiError = (error: unknown, defaultMessage: string) => {
     const message = error instanceof Error ? error.message : defaultMessage;
@@ -56,22 +58,59 @@ export default function TrueNumberGame() {
     }
   };
 
+  const animateNumberGeneration = () => {
+    let count = 0;
+    const interval = setInterval(() => {
+      setGeneratingNumber(Math.floor(Math.random() * 100) + 1);
+      count++;
+      if (count > 20) {
+        clearInterval(interval);
+      }
+    }, 100);
+    return interval;
+  };
+
   const playGame = async () => {
     try {
       setLoading(prev => ({ ...prev, game: true }));
+      setShowResult(false);
+
+      // Animation de génération
+      const animationInterval = animateNumberGeneration();
+
       const { success, data, error } = await apiService.user.playGame();
 
       if (!success || !data) {
+        clearInterval(animationInterval);
+        setGeneratingNumber(null);
         throw new Error(error || 'Erreur lors du jeu');
       }
 
       const gameData: GameResult = data.data;
-      updateGameState(gameData);
-      showGameResultNotification(gameData);
+
+      // Arrêter l'animation et afficher le vrai nombre
+      setTimeout(() => {
+        clearInterval(animationInterval);
+        setGeneratingNumber(gameData.number);
+        setShowResult(true);
+        updateGameState(gameData);
+        showGameResultNotification(gameData);
+
+        // Réinitialiser après 3 secondes
+        setTimeout(() => {
+          setGeneratingNumber(null);
+          setShowResult(false);
+        }, 3000);
+      }, 2000);
+
     } catch (error) {
       handleApiError(error, 'Erreur lors du jeu');
+      setGeneratingNumber(null);
+      setShowResult(false);
     } finally {
-      setLoading(prev => ({ ...prev, game: false }));
+      setTimeout(() => {
+        setLoading(prev => ({ ...prev, game: false }));
+      }, 2000);
     }
   };
 
@@ -93,8 +132,8 @@ export default function TrueNumberGame() {
   const showGameResultNotification = (gameData: GameResult) => {
     setNotification({
       message: gameData.result === 'win'
-        ? `Félicitations ! Vous avez gagné ${gameData.pointsChange} points avec le nombre ${gameData.number}`
-        : `Désolé, vous avez perdu ${Math.abs(gameData.pointsChange)} points avec le nombre ${gameData.number}`,
+        ? `🎉 Félicitations ! Vous avez gagné ${gameData.pointsChange} points avec le nombre ${gameData.number}`
+        : `😔 Désolé, vous avez perdu ${Math.abs(gameData.pointsChange)} points avec le nombre ${gameData.number}`,
       type: gameData.result === 'win' ? 'success' : 'error'
     });
   };
@@ -139,21 +178,32 @@ export default function TrueNumberGame() {
   }, []);
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mt-6">
-      <h2 className="text-xl font-bold text-gray-800 mb-4">TrueNumber</h2>
+    <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-8 mt-6 transition-all duration-300 hover:shadow-2xl">
+      <div className="text-center mb-8">
+        <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
+          TrueNumber
+        </h2>
+        <p className="text-gray-600">Testez votre chance avec les nombres magiques !</p>
+      </div>
 
-      <div className="flex gap-4 mb-6">
+      <div className="flex flex-wrap justify-center gap-4 mb-8">
         <button
-          className={`px-4 py-2 rounded-md font-semibold transition-colors ${!isMultiplayer ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${!isMultiplayer
+              ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-lg hover:shadow-xl'
+              : 'bg-white text-gray-700 hover:bg-gray-50 shadow-md'
+            }`}
           onClick={() => setIsMultiplayer(false)}
         >
-          Solo
+          🎯 Solo
         </button>
         <button
-          className={`px-4 py-2 rounded-md font-semibold transition-colors ${isMultiplayer ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${isMultiplayer
+              ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg hover:shadow-xl'
+              : 'bg-white text-gray-700 hover:bg-gray-50 shadow-md'
+            }`}
           onClick={() => setIsMultiplayer(true)}
         >
-          Multijoueur
+          👥 Multijoueur
         </button>
       </div>
 
@@ -169,19 +219,76 @@ export default function TrueNumberGame() {
             />
           )}
 
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-700">
-              Votre solde: {points} points
-            </h3>
+          {/* Points Display */}
+          <div className="bg-white rounded-xl p-3 mb-4 shadow border border-gray-100 max-w-xs mx-auto">
+            <div className="flex items-center justify-center space-x-2">
+              <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-2 rounded-full">
+                <span className="text-xl">💰</span>
+              </div>
+              <div>
+                <h3 className="text-base font-medium text-gray-700 mb-0.5">Votre solde</h3>
+                <p className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                  {points.toLocaleString()} pts
+                </p>
+              </div>
+            </div>
           </div>
 
-          <button
-            onClick={playGame}
-            disabled={loading.game}
-            className="px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-          >
-            {loading.game ? 'En cours...' : 'Générer un nombre'}
-          </button>
+          {/* Number Generation Area */}
+          <div className="bg-white rounded-2xl p-8 mb-8 shadow-lg border border-gray-100 text-center">
+            {generatingNumber !== null ? (
+              <div className="py-8">
+                <div className={`text-8xl font-bold mb-4 transition-all duration-300 ${showResult
+                    ? 'text-green-500 animate-bounce'
+                    : 'text-gray-400 animate-pulse'
+                  }`}>
+                  {generatingNumber}
+                </div>
+                {!showResult && (
+                  <div className="flex justify-center items-center space-x-2">
+                    <div className="w-3 h-3 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-3 h-3 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-3 h-3 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  </div>
+                )}
+                {showResult && (
+                  <p className="text-green-600 font-semibold text-xl animate-pulse">
+                    ✨ Votre nombre magique ! ✨
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="py-8">
+                <div className="text-6xl text-gray-300 mb-4">?</div>
+                <p className="text-gray-500 text-lg">Cliquez pour générer votre nombre</p>
+              </div>
+            )}
+          </div>
+
+          {/* Play Button */}
+          <div className="text-center mb-8">
+            <button
+              onClick={playGame}
+              disabled={loading.game}
+              className={`px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-300 transform ${loading.game
+                  ? 'bg-gray-400 text-white cursor-not-allowed'
+                  : 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 hover:scale-105 shadow-lg hover:shadow-xl'
+                }`}
+            >
+              {loading.game ? (
+                <div className="flex items-center space-x-2">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Génération en cours...</span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <span>🎲</span>
+                  <span>Générer mon nombre</span>
+                  <span>✨</span>
+                </div>
+              )}
+            </button>
+          </div>
 
           <GameHistorySection
             gameHistory={gameHistory}
@@ -208,50 +315,103 @@ const GameHistorySection = ({
   onRefresh,
   formatDate
 }: GameHistorySectionProps) => (
-  <div className="mt-8">
-    <div className="flex justify-between items-center mb-4">
-      <h3 className="text-lg font-semibold text-gray-700">
-        Historique des parties
+  <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
+    <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
+      <h3 className="text-xl font-bold text-gray-800 flex items-center space-x-2">
+        <span>📊</span>
+        <span>Historique des parties</span>
       </h3>
       <button
         onClick={onRefresh}
         disabled={loading}
-        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50 transition-colors"
+        className={`px-4 py-2 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${loading
+            ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+            : 'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 shadow-md hover:shadow-lg'
+          }`}
       >
-        {loading ? 'Chargement...' : 'Rafraîchir'}
+        {loading ? (
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin"></div>
+            <span>Chargement...</span>
+          </div>
+        ) : (
+          <div className="flex items-center space-x-2">
+            <span>🔄</span>
+            <span>Rafraîchir</span>
+          </div>
+        )}
       </button>
     </div>
 
     {gameHistory.length > 0 ? (
       <div className="overflow-x-auto">
-        <table className="min-w-full bg-white">
-          <thead>
-            <tr className="border-b">
-              <th className="px-4 py-2 text-left">Date</th>
-              <th className="px-4 py-2 text-left">Nombre</th>
-              <th className="px-4 py-2 text-left">Résultat</th>
-              <th className="px-4 py-2 text-left">Points</th>
-            </tr>
-          </thead>
-          <tbody>
-            {gameHistory.map((game) => (
-              <tr key={game._id} className="border-b">
-                <td className="px-4 py-2">{formatDate(game.createdAt)}</td>
-                <td className="px-4 py-2">{game.number}</td>
-                <td className="px-4 py-2">
-                  <ResultBadge result={game.result} />
-                </td>
-                <td className={`px-4 py-2 ${game.pointsChange > 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                  {game.pointsChange > 0 ? '+' : ''}{game.pointsChange}
-                </td>
+        <div className="hidden md:block">
+          <table className="min-w-full">
+            <thead>
+              <tr className="border-b-2 border-gray-100">
+                <th className="px-4 py-3 text-left font-semibold text-gray-700">📅 Date</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-700">🎲 Nombre</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-700">🏆 Résultat</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-700">💰 Points</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {gameHistory.map((game, index) => (
+                <tr
+                  key={game._id}
+                  className="border-b border-gray-50 hover:bg-gray-50 transition-colors duration-200"
+                  style={{ animationDelay: `${index * 50}ms` }}
+                >
+                  <td className="px-4 py-3 text-gray-600">{formatDate(game.createdAt)}</td>
+                  <td className="px-4 py-3">
+                    <span className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full font-bold">
+                      {game.number}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <ResultBadge result={game.result} />
+                  </td>
+                  <td className={`px-4 py-3 font-bold ${game.pointsChange > 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                    {game.pointsChange > 0 ? '+' : ''}{game.pointsChange}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile view */}
+        <div className="md:hidden space-y-4">
+          {gameHistory.map((game, index) => (
+            <div
+              key={game._id}
+              className="bg-gray-50 rounded-xl p-4 border border-gray-100 hover:shadow-md transition-all duration-200"
+              style={{ animationDelay: `${index * 50}ms` }}
+            >
+              <div className="flex justify-between items-start mb-2">
+                <span className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full font-bold text-lg">
+                  {game.number}
+                </span>
+                <ResultBadge result={game.result} />
+              </div>
+              <div className="flex justify-between items-center text-sm text-gray-600">
+                <span>{formatDate(game.createdAt)}</span>
+                <span className={`font-bold ${game.pointsChange > 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                  {game.pointsChange > 0 ? '+' : ''}{game.pointsChange} pts
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     ) : (
-      <p className="text-gray-500">Aucun historique disponible</p>
+      <div className="text-center py-12">
+        <div className="text-6xl text-gray-300 mb-4">🎯</div>
+        <p className="text-gray-500 text-lg">Aucun historique disponible</p>
+        <p className="text-gray-400">Commencez à jouer pour voir vos résultats !</p>
+      </div>
     )}
   </div>
 );
@@ -261,8 +421,11 @@ interface ResultBadgeProps {
 }
 
 const ResultBadge = ({ result }: ResultBadgeProps) => (
-  <span className={`px-2 py-1 rounded-full text-xs ${result === 'win' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+  <span className={`px-3 py-1 rounded-full text-sm font-bold flex items-center space-x-1 ${result === 'win'
+      ? 'bg-green-100 text-green-800'
+      : 'bg-red-100 text-red-800'
     }`}>
-    {result === 'win' ? 'Gagné' : 'Perdu'}
+    <span>{result === 'win' ? '🏆' : '💔'}</span>
+    <span>{result === 'win' ? 'Gagné' : 'Perdu'}</span>
   </span>
 );
