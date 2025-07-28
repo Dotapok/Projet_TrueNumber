@@ -37,6 +37,8 @@ export default function MultiplayerGame() {
     });
     const [userBalance, setUserBalance] = useState<number>(0);
     const [isLoading, setIsLoading] = useState(true);
+    const [isCreatingGame, setIsCreatingGame] = useState(false); // Ajout pour bouton Créer
+    const [joiningGameId, setJoiningGameId] = useState<string | null>(null); // Ajout pour bouton Rejoindre
     const userId = localStorage.getItem('userId');
 
     // Initialisation Socket.IO et chargement des données
@@ -57,25 +59,23 @@ export default function MultiplayerGame() {
 
         onGameStarted((data: GameStartedData) => {
             console.log('Partie démarrée:', data);
+            // Correction: si le backend ne renvoie que les IDs, on affiche "Vous" ou "Adversaire" selon l'ID
             const completeGame = {
                 ...data.game,
                 creator: typeof data.game.creator === 'string' ? {
                     _id: data.game.creator,
-                    firstName: 'Joueur 1'
+                    firstName: data.game.creator === userId ? 'Vous' : 'Joueur 1'
                 } : data.game.creator,
                 opponent: typeof data.game.opponent === 'string' ? {
                     _id: data.game.opponent,
-                    firstName: 'Joueur 2'
+                    firstName: data.game.opponent === userId ? 'Vous' : 'Joueur 2'
                 } : data.game.opponent
             };
             setCurrentGame(completeGame);
             setGameStarted(true);
             setIsMyTurn(data.currentPlayer === userId);
             setTimeRemaining(data.timeLimit);
-
-            // Retirer la partie de la liste des parties en attente
             setGames(prev => prev.filter(game => game._id !== data.game._id));
-
             setNotification({
                 message: `Partie démarrée! ${data.currentPlayer === userId ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
                 type: 'success'
@@ -225,11 +225,12 @@ export default function MultiplayerGame() {
             });
             return;
         }
-
+        setIsCreatingGame(true);
         const { success, data, error } = await apiService.game.createMultiplayerGame(
             formData.stake,
             formData.timeLimit
         );
+        setIsCreatingGame(false);
 
         if (success && data) {
             // Gérer les différentes structures de réponse possibles
@@ -293,8 +294,9 @@ export default function MultiplayerGame() {
             });
             return;
         }
-
+        setJoiningGameId(gameId);
         const { success, data, error } = await apiService.game.joinMultiplayerGame(gameId);
+        setJoiningGameId(null);
 
         if (success && data) {
             console.log(data);
@@ -691,10 +693,10 @@ export default function MultiplayerGame() {
                         </button>
                         <button
                             onClick={createGame}
-                            disabled={formData.stake > userBalance}
+                            disabled={formData.stake > userBalance || isCreatingGame}
                             className="flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-300 bg-gradient-to-r from-green-400 to-green-600 text-white hover:from-green-500 hover:to-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Créer
+                            {isCreatingGame ? 'Création...' : 'Créer'}
                         </button>
                     </div>
                 </div>
@@ -754,10 +756,10 @@ export default function MultiplayerGame() {
                                 </div>
                                 <button
                                     onClick={() => joinGame(game._id)}
-                                    disabled={game.creator._id === userId}
-                                    className={`px-6 py-3 rounded-2xl font-bold text-lg transition-all duration-300 transform bg-gradient-to-r from-blue-500 to-blue-700 text-white hover:from-blue-600 hover:to-blue-800 hover:scale-105 shadow-lg hover:shadow-xl ${game.creator._id === userId ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    disabled={game.creator._id === userId || joiningGameId === game._id}
+                                    className={`px-6 py-3 rounded-2xl font-bold text-lg transition-all duration-300 transform bg-gradient-to-r from-blue-500 to-blue-700 text-white hover:from-blue-600 hover:to-blue-800 hover:scale-105 shadow-lg hover:shadow-xl ${game.creator._id === userId || joiningGameId === game._id ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
-                                    Rejoindre
+                                    {joiningGameId === game._id ? 'Connexion...' : 'Rejoindre'}
                                 </button>
                             </div>
                         ))}
