@@ -81,7 +81,8 @@ export default function MultiplayerGame() {
             };
             setCurrentGame(completeGame);
             // Correction logique de tour : le créateur commence toujours
-            const isMyTurn = completeGame.creator._id === userId;
+            const isMyTurn = String(completeGame.creator._id) === String(userId);
+            console.log('[DEBUG] Comparaison tour : creator._id =', completeGame.creator._id, 'userId =', userId, 'isMyTurn =', isMyTurn);
             setIsMyTurn(isMyTurn);
             setGameStarted(true);
             setTimeRemaining(data.timeLimit);
