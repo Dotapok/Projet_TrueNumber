@@ -35,6 +35,7 @@ export default function MultiplayerGame() {
         timeLimit: 60
     });
     const [userBalance, setUserBalance] = useState<number>(0);
+    const userId = localStorage.getItem('userId');
 
     // Initialisation Socket.IO et chargement des données
     useEffect(() => {
@@ -51,14 +52,14 @@ export default function MultiplayerGame() {
             console.log('Partie démarrée:', data);
             setCurrentGame(data.game);
             setGameStarted(true);
-            setIsMyTurn(data.currentPlayer === localStorage.getItem('userId'));
+            setIsMyTurn(data.currentPlayer === userId);
             setTimeRemaining(data.timeLimit);
 
             // Retirer la partie de la liste des parties en attente
             setGames(prev => prev.filter(game => game._id !== data.game._id));
 
             setNotification({
-                message: `Partie démarrée! ${isMyTurn ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
+                message: `Partie démarrée! ${data.currentPlayer === userId ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
                 type: 'success'
             });
         });
@@ -72,7 +73,7 @@ export default function MultiplayerGame() {
                 setIsMyTurn(false);
                 setTimeRemaining(null);
 
-                const isWinner = data.game.winner === localStorage.getItem('userId');
+                const isWinner = data.game.winner === userId;
                 const winnerName = isWinner ? 'Vous' :
                     (data.game.winner === data.game.creator._id ? data.game.creator.firstName : data.game.opponent?.firstName);
 
@@ -84,7 +85,7 @@ export default function MultiplayerGame() {
                 // Recharger le solde utilisateur
                 loadUserBalance();
             } else {
-                setIsMyTurn(data.nextPlayer === localStorage.getItem('userId'));
+                setIsMyTurn(data.nextPlayer === userId);
                 if (data.timeout) {
                     setNotification({
                         message: 'Temps écoulé! Le joueur a perdu automatiquement.',
@@ -105,7 +106,7 @@ export default function MultiplayerGame() {
             cleanupSocketListeners();
             disconnectSocket();
         };
-    }, []);
+    }, [userId]);
 
     const loadWaitingGames = async () => {
         const { success, data } = await apiService.game.listWaitingGames();
@@ -122,13 +123,21 @@ export default function MultiplayerGame() {
     };
 
     const createGame = async () => {
+        if (formData.stake > userBalance) {
+            setNotification({
+                message: `Solde insuffisant pour créer cette partie. Vous avez ${userBalance} points.`,
+                type: 'error'
+            });
+            return;
+        }
+
         const { success, data, error } = await apiService.game.createMultiplayerGame(
             formData.stake,
             formData.timeLimit
         );
 
         if (success && data) {
-            setCurrentGame(data.data);
+            setGames(prev => [...prev, data.data]);
             joinGameRoom(data.data._id);
             setShowCreateModal(false);
             setNotification({
@@ -144,9 +153,20 @@ export default function MultiplayerGame() {
     };
 
     const joinGame = async (gameId: string) => {
-        // Vérifier le solde avant de rejoindre
         const game = games.find(g => g._id === gameId);
-        if (game && userBalance < game.stake) {
+        if (!game) return;
+
+        // Empêcher de rejoindre sa propre partie
+        if (game.creator._id === userId) {
+            setNotification({
+                message: 'Vous ne pouvez pas rejoindre votre propre partie',
+                type: 'error'
+            });
+            return;
+        }
+
+        // Vérifier le solde
+        if (userBalance < game.stake) {
             setNotification({
                 message: `Solde insuffisant pour rejoindre cette partie. Vous avez ${userBalance} points, la mise est de ${game.stake} points.`,
                 type: 'error'
@@ -157,7 +177,6 @@ export default function MultiplayerGame() {
         const { success, data, error } = await apiService.game.joinMultiplayerGame(gameId);
 
         if (success && data) {
-            setCurrentGame(data.data);
             joinGameRoom(gameId);
             setNotification({
                 message: 'Partie rejointe! La partie va démarrer...',
@@ -297,10 +316,10 @@ export default function MultiplayerGame() {
                 )}
 
                 <div className="grid grid-cols-2 gap-6 mb-8">
-                    <div className="bg-white border border-gray-100 p-6 rounded-2xl shadow flex flex-col items-center">
+                    <div className={`bg-white border ${currentGame.creator._id === userId ? 'border-blue-300' : 'border-gray-100'} p-6 rounded-2xl shadow flex flex-col items-center`}>
                         <h3 className="font-semibold text-lg mb-2 text-indigo-700 flex items-center gap-2">
                             👤 {currentGame.creator.firstName}
-                            {currentGame.creator._id === localStorage.getItem('userId') && ' (Vous)'}
+                            {currentGame.creator._id === userId && ' (Vous)'}
                         </h3>
                         <p className="text-gray-600 font-mono text-xl">
                             {currentGame.creatorNumber !== undefined ?
@@ -310,13 +329,13 @@ export default function MultiplayerGame() {
                         </p>
                     </div>
 
-                    <div className="bg-white border border-gray-100 p-6 rounded-2xl shadow flex flex-col items-center">
+                    <div className={`bg-white border ${currentGame.opponent?._id === userId ? 'border-blue-300' : 'border-gray-100'} p-6 rounded-2xl shadow flex flex-col items-center`}>
                         <h3 className="font-semibold text-lg mb-2 text-purple-700 flex items-center gap-2">
                             {currentGame.opponent?.firstName ?
                                 `👥 ${currentGame.opponent.firstName}` :
                                 <span className="italic text-gray-400">En attente...</span>
                             }
-                            {currentGame.opponent?._id === localStorage.getItem('userId') && ' (Vous)'}
+                            {currentGame.opponent?._id === userId && ' (Vous)'}
                         </h3>
                         <p className="text-gray-600 font-mono text-xl">
                             {currentGame.opponentNumber !== undefined ?
@@ -381,14 +400,24 @@ export default function MultiplayerGame() {
                 {games.length > 0 ? (
                     <div className="space-y-4">
                         {games.map(game => (
-                            <div key={game._id} className="bg-white border border-gray-100 p-6 rounded-2xl shadow flex flex-col md:flex-row justify-between items-center transition-all duration-300 hover:shadow-xl">
+                            <div
+                                key={game._id}
+                                className={`bg-white border ${game.creator._id === userId ? 'border-blue-300' : 'border-gray-100'} p-6 rounded-2xl shadow flex flex-col md:flex-row justify-between items-center transition-all duration-300 hover:shadow-xl`}
+                            >
                                 <div className="mb-2 md:mb-0">
-                                    <p className="font-semibold text-indigo-700">Créée par: {game.creator.firstName}</p>
+                                    <p className="font-semibold text-indigo-700">
+                                        Créée par: {game.creator.firstName}
+                                        {game.creator._id === userId && ' (Votre partie)'}
+                                    </p>
                                     <p className="text-gray-600">Mise: {game.stake} points - Temps: {game.timeLimit}s</p>
+                                    {game.creator._id === userId && (
+                                        <p className="text-blue-500 text-sm mt-1">En attente d'un adversaire...</p>
+                                    )}
                                 </div>
                                 <button
                                     onClick={() => joinGame(game._id)}
-                                    className="px-6 py-3 rounded-2xl font-bold text-lg transition-all duration-300 transform bg-gradient-to-r from-blue-500 to-blue-700 text-white hover:from-blue-600 hover:to-blue-800 hover:scale-105 shadow-lg hover:shadow-xl"
+                                    disabled={game.creator._id === userId}
+                                    className={`px-6 py-3 rounded-2xl font-bold text-lg transition-all duration-300 transform bg-gradient-to-r from-blue-500 to-blue-700 text-white hover:from-blue-600 hover:to-blue-800 hover:scale-105 shadow-lg hover:shadow-xl ${game.creator._id === userId ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                     Rejoindre
                                 </button>
