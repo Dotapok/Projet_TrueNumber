@@ -35,13 +35,19 @@ export default function MultiplayerGame() {
         timeLimit: 60
     });
     const [userBalance, setUserBalance] = useState<number>(0);
+    const [isLoading, setIsLoading] = useState(true);
     const userId = localStorage.getItem('userId');
 
     // Initialisation Socket.IO et chargement des données
     useEffect(() => {
-        connectSocket();
-        loadWaitingGames();
-        loadUserBalance();
+        const initializeData = async () => {
+            setIsLoading(true);
+            connectSocket();
+            await Promise.all([loadWaitingGames(), loadUserBalance()]);
+            setIsLoading(false);
+        };
+        
+        initializeData();
 
         // Écouteurs d'événements Socket.IO
         onJoinedRoom((data) => {
@@ -146,16 +152,49 @@ export default function MultiplayerGame() {
     }, [currentGame, gameStarted]);
 
     const loadWaitingGames = async () => {
-        const { success, data } = await apiService.game.listWaitingGames();
-        if (success && data) {
-            setGames(Array.isArray(data) ? data : data.data || []);
+        try {
+            const { success, data } = await apiService.game.listWaitingGames();
+            if (success && data) {
+                // Gérer les différentes structures de réponse possibles
+                let games = [];
+                if (Array.isArray(data)) {
+                    games = data;
+                } else if (data.data) {
+                    games = data.data;
+                } else {
+                    games = [];
+                }
+                setGames(games);
+            } else {
+                setGames([]);
+            }
+        } catch (error) {
+            console.error('Erreur lors du chargement des parties:', error);
+            setGames([]);
         }
     };
 
     const loadUserBalance = async () => {
-        const { success, data } = await apiService.user.getPointsBalance();
-        if (success && data) {
-            setUserBalance(Array.isArray(data) ? data[0]?.points || 0 : data.points || 0);
+        try {
+            const { success, data } = await apiService.user.getPointsBalance();
+            console.log(data);
+            if (success && data) {
+                // Gérer les différentes structures de réponse possibles
+                let points = 0;
+                if (Array.isArray(data)) {
+                    points = data[0]?.data?.points || data[0]?.points || 0;
+                } else if (data.data) {
+                    points = data.data.points || 0;
+                } else {
+                    points = data.points || 0;
+                }
+                setUserBalance(points);
+            } else {
+                setUserBalance(0);
+            }
+        } catch (error) {
+            console.error('Erreur lors du chargement du solde:', error);
+            setUserBalance(0);
         }
     };
 
@@ -174,7 +213,16 @@ export default function MultiplayerGame() {
         );
 
         if (success && data) {
-            const gameData = Array.isArray(data) ? data[0] : data;
+            // Gérer les différentes structures de réponse possibles
+            let gameData;
+            if (Array.isArray(data)) {
+                gameData = data[0];
+            } else if (data.data) {
+                gameData = data.data;
+            } else {
+                gameData = data;
+            }
+            
             // Mettre à jour la liste des parties
             setGames(prev => [...prev, gameData]);
             // Définir la partie courante et rejoindre la room
@@ -230,7 +278,16 @@ export default function MultiplayerGame() {
         const { success, data, error } = await apiService.game.joinMultiplayerGame(gameId);
 
         if (success && data) {
-            const gameData = Array.isArray(data) ? data[0] : data;
+            // Gérer les différentes structures de réponse possibles
+            let gameData;
+            if (Array.isArray(data)) {
+                gameData = data[0];
+            } else if (data.data) {
+                gameData = data.data;
+            } else {
+                gameData = data;
+            }
+            
             // Rejoindre la room et attendre l'événement gameStarted
             joinGameRoom(gameId);
             setCurrentGame(gameData);
@@ -323,7 +380,15 @@ export default function MultiplayerGame() {
         try {
             const { success, data } = await apiService.game.getGameStatus(currentGame._id);
             if (success && data) {
-                const gameData = data.game;
+                // Gérer les différentes structures de réponse possibles
+                let gameData;
+                if (data.game) {
+                    gameData = data.game;
+                } else if (Array.isArray(data)) {
+                    gameData = data[0];
+                } else {
+                    gameData = data;
+                }
                 
                 // Si la partie a deux joueurs et est en statut "playing", la démarrer
                 if (gameData.opponent && gameData.status === 'playing') {
@@ -348,15 +413,15 @@ export default function MultiplayerGame() {
     };
 
     // Interface d'attente (quand on a créé une partie mais qu'elle n'a pas encore commencé)
-    if (currentGame && !gameStarted) {
+    if (currentGame && !gameStarted && currentGame.creator) {
         return (
             <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-8 mt-6 transition-all duration-300 hover:shadow-2xl">
                 <div className="text-center mb-8">
                     <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
-                        {currentGame.creator._id === userId ? 'Partie créée' : 'Partie rejointe'} - Mise: {currentGame.stake} points
+                        {currentGame.creator?._id === userId ? 'Partie créée' : 'Partie rejointe'} - Mise: {currentGame.stake} points
                     </h2>
                     <p className="text-gray-600">
-                        {currentGame.creator._id === userId
+                        {currentGame.creator?._id === userId
                             ? 'En attente d\'un adversaire...'
                             : 'La partie va bientôt commencer...'}
                     </p>
@@ -373,8 +438,8 @@ export default function MultiplayerGame() {
                 <div className="grid grid-cols-2 gap-6 mb-8">
                     <div className="bg-white border border-blue-300 p-6 rounded-2xl shadow flex flex-col items-center">
                         <h3 className="font-semibold text-lg mb-2 text-indigo-700 flex items-center gap-2">
-                            👤 {currentGame.creator.firstName}
-                            {currentGame.creator._id === userId && ' (Vous)'}
+                            👤 {currentGame.creator?.firstName || 'Joueur'}
+                            {currentGame.creator?._id === userId && ' (Vous)'}
                         </h3>
                         <p className="text-gray-600 italic">Prêt</p>
                     </div>
@@ -397,7 +462,7 @@ export default function MultiplayerGame() {
                         onClick={leaveGame}
                         className="px-6 py-2 rounded-xl font-bold transition-all duration-300 bg-gray-200 text-gray-700 hover:bg-gray-300"
                     >
-                        {currentGame.creator._id === userId ? 'Annuler la partie' : 'Quitter'}
+                        {currentGame.creator?._id === userId ? 'Annuler la partie' : 'Quitter'}
                     </button>
                     
                     {currentGame.opponent && (
@@ -414,7 +479,7 @@ export default function MultiplayerGame() {
     }
 
     // Interface de jeu en cours
-    if (currentGame && gameStarted) {
+    if (currentGame && gameStarted && currentGame.creator) {
         return (
             <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-8 mt-6 transition-all duration-300 hover:shadow-2xl">
                 <div className="text-center mb-8">
@@ -433,10 +498,10 @@ export default function MultiplayerGame() {
                 )}
 
                 <div className="grid grid-cols-2 gap-6 mb-8">
-                    <div className={`bg-white border ${currentGame.creator._id === userId ? 'border-blue-300' : 'border-gray-100'} p-6 rounded-2xl shadow flex flex-col items-center`}>
+                    <div className={`bg-white border ${currentGame.creator?._id === userId ? 'border-blue-300' : 'border-gray-100'} p-6 rounded-2xl shadow flex flex-col items-center`}>
                         <h3 className="font-semibold text-lg mb-2 text-indigo-700 flex items-center gap-2">
-                            👤 {currentGame.creator.firstName}
-                            {currentGame.creator._id === userId && ' (Vous)'}
+                            👤 {currentGame.creator?.firstName || 'Joueur'}
+                            {currentGame.creator?._id === userId && ' (Vous)'}
                         </h3>
                         <p className="text-gray-600 font-mono text-xl">
                             {currentGame.creatorNumber !== undefined ?
@@ -545,6 +610,20 @@ export default function MultiplayerGame() {
                             Créer
                         </button>
                     </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Interface de chargement
+    if (isLoading) {
+        return (
+            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-8 mt-6 transition-all duration-300 hover:shadow-2xl">
+                <div className="text-center mb-8">
+                    <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
+                        Mode Multijoueur
+                    </h2>
+                    <p className="text-gray-600">Chargement...</p>
                 </div>
             </div>
         );
