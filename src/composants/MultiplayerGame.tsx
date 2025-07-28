@@ -57,7 +57,18 @@ export default function MultiplayerGame() {
 
         onGameStarted((data: GameStartedData) => {
             console.log('Partie démarrée:', data);
-            setCurrentGame(data.game);
+            const completeGame = {
+                ...data.game,
+                creator: typeof data.game.creator === 'string' ? {
+                    _id: data.game.creator,
+                    firstName: 'Joueur 1'
+                } : data.game.creator,
+                opponent: typeof data.game.opponent === 'string' ? {
+                    _id: data.game.opponent,
+                    firstName: 'Joueur 2'
+                } : data.game.opponent
+            };
+            setCurrentGame(completeGame);
             setGameStarted(true);
             setIsMyTurn(data.currentPlayer === userId);
             setTimeRemaining(data.timeLimit);
