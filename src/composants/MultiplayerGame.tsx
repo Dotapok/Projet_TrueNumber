@@ -805,8 +805,16 @@ export default function MultiplayerGame() {
                                 </div>
                                 <button
                                     onClick={() => joinGame(game._id)}
-                                    disabled={game.creator._id === userId || joiningGameId === game._id}
-                                    className={`px-6 py-3 rounded-2xl font-bold text-lg transition-all duration-300 transform bg-gradient-to-r from-blue-500 to-blue-700 text-white hover:from-blue-600 hover:to-blue-800 hover:scale-105 shadow-lg hover:shadow-xl ${game.creator._id === userId || joiningGameId === game._id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    disabled={String(game.creator._id) === String(userId) || joiningGameId === game._id}
+                                    className={`
+                                        px-6 py-3 rounded-2xl font-bold text-lg transition-all duration-300 transform
+                                        bg-gradient-to-r from-blue-500 to-blue-700 text-white
+                                        hover:from-blue-600 hover:to-blue-800 hover:scale-105 shadow-lg hover:shadow-xl
+                                        ${String(game.creator._id) === String(userId) || joiningGameId === game._id
+                                            ? 'opacity-50 cursor-not-allowed'
+                                            : ''
+                                        }
+                                    `}
                                 >
                                     {joiningGameId === game._id ? 'Connexion...' : 'Rejoindre'}
                                 </button>
