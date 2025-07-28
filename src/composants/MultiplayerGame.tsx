@@ -300,6 +300,7 @@ export default function MultiplayerGame() {
         const { success, data, error } = await apiService.game.joinMultiplayerGame(gameId);
 
         if (success && data) {
+            console.log(data);
             // Gérer les différentes structures de réponse possibles
             let gameData;
             if (Array.isArray(data)) {
