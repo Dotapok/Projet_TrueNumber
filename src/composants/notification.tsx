@@ -36,7 +36,7 @@ export default function Notification({
   }[type];
 
   return (
-    <div className={`fixed top-4 right-4 border-l-4 p-4 rounded shadow-lg ${bgColor}`} role="alert">
+    <div className={`fixed top-4 right-4 border-l-4 p-4 rounded shadow-lg z-50 ${bgColor}`} role="alert">
       <div className="flex items-center">
         <div className="py-1">
           <svg className={`h-6 w-6 mr-4 ${

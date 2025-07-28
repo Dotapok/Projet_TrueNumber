@@ -81,10 +81,27 @@ export default function MultiplayerGame() {
                     message: `${data.game.opponent.firstName} a rejoint la partie! La partie va démarrer...`,
                     type: 'success'
                 });
+                
+                // Si la partie a maintenant deux joueurs, la démarrer automatiquement
+                if (data.game.opponent && data.game.status === 'playing') {
+                    console.log('Démarrage automatique après jointure d\'un adversaire');
+                    setGameStarted(true);
+                    setIsMyTurn(data.game.creator._id === userId);
+                    setTimeRemaining(data.game.timeLimit);
+                    
+                    setNotification({
+                        message: `Partie démarrée! ${data.game.creator._id === userId ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
+                        type: 'success'
+                    });
+                    
+                    // Retirer la partie de la liste des parties en attente
+                    setGames(prev => prev.filter(game => game._id !== data.game._id));
+                    return;
+                }
             }
 
             // Vérifier si la partie doit démarrer (deux joueurs présents)
-            if (data.game.status === 'playing' && !gameStarted) {
+            if (data.game.status === 'playing' && !gameStarted && data.game.opponent) {
                 console.log('Démarrage automatique de la partie');
                 setGameStarted(true);
                 setIsMyTurn(data.game.creator._id === userId);
@@ -143,11 +160,16 @@ export default function MultiplayerGame() {
     // Polling pour vérifier l'état de la partie quand on est en attente
     useEffect(() => {
         if (currentGame && !gameStarted) {
+            console.log('Démarrage du polling pour la partie:', currentGame._id);
             const interval = setInterval(() => {
+                console.log('Polling - vérification du statut...');
                 checkAndStartGame();
-            }, 2000); // Vérifier toutes les 2 secondes
+            }, 1000); // Vérifier toutes les secondes
 
-            return () => clearInterval(interval);
+            return () => {
+                console.log('Arrêt du polling');
+                clearInterval(interval);
+            };
         }
     }, [currentGame, gameStarted]);
 
@@ -288,6 +310,9 @@ export default function MultiplayerGame() {
                 gameData = data;
             }
             
+            console.log('Données de jeu après jointure:', gameData);
+            console.log('Opponent:', gameData.opponent, 'Status:', gameData.status);
+            
             // Rejoindre la room et attendre l'événement gameStarted
             joinGameRoom(gameId);
             setCurrentGame(gameData);
@@ -307,6 +332,7 @@ export default function MultiplayerGame() {
                 // Retirer la partie de la liste des parties en attente
                 setGames(prev => prev.filter(game => game._id !== gameData._id));
             } else {
+                console.log('Partie rejointe mais pas encore prête à démarrer');
                 setNotification({
                     message: 'Partie rejointe! La partie va démarrer...',
                     type: 'success'
@@ -314,6 +340,7 @@ export default function MultiplayerGame() {
                 
                 // Forcer la vérification du statut après un délai
                 setTimeout(() => {
+                    console.log('Vérification différée du statut...');
                     checkAndStartGame();
                 }, 1000);
             }
@@ -377,8 +404,13 @@ export default function MultiplayerGame() {
     const checkAndStartGame = async () => {
         if (!currentGame || gameStarted) return;
 
+        console.log('Vérification du statut de la partie:', currentGame._id);
+        console.log('État actuel - gameStarted:', gameStarted, 'currentGame:', currentGame);
+
         try {
             const { success, data } = await apiService.game.getGameStatus(currentGame._id);
+            console.log('Réponse API getGameStatus:', { success, data });
+            
             if (success && data) {
                 // Gérer les différentes structures de réponse possibles
                 let gameData;
@@ -389,6 +421,9 @@ export default function MultiplayerGame() {
                 } else {
                     gameData = data;
                 }
+                
+                console.log('Données de jeu traitées:', gameData);
+                console.log('Opponent:', gameData.opponent, 'Status:', gameData.status);
                 
                 // Si la partie a deux joueurs et est en statut "playing", la démarrer
                 if (gameData.opponent && gameData.status === 'playing') {
@@ -405,6 +440,8 @@ export default function MultiplayerGame() {
                     
                     // Retirer la partie de la liste des parties en attente
                     setGames(prev => prev.filter(game => game._id !== gameData._id));
+                } else {
+                    console.log('Conditions non remplies pour démarrer la partie');
                 }
             }
         } catch (error) {
@@ -473,6 +510,17 @@ export default function MultiplayerGame() {
                             Démarrer la partie
                         </button>
                     )}
+                    
+                    {/* Bouton de débogage temporaire */}
+                    <button
+                        onClick={() => {
+                            console.log('État actuel:', { currentGame, gameStarted, isMyTurn });
+                            checkAndStartGame();
+                        }}
+                        className="px-4 py-2 rounded-xl font-bold transition-all duration-300 bg-yellow-500 text-white hover:bg-yellow-600 text-sm"
+                    >
+                        Debug
+                    </button>
                 </div>
             </div>
         );
