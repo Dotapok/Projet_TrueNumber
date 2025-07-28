@@ -40,6 +40,10 @@ export default function MultiplayerGame() {
     const [isCreatingGame, setIsCreatingGame] = useState(false); // Ajout pour bouton Créer
     const [joiningGameId, setJoiningGameId] = useState<string | null>(null); // Ajout pour bouton Rejoindre
     const [isGenerating, setIsGenerating] = useState(false); // Pour l'animation de génération
+    const [showCountdownBanner, setShowCountdownBanner] = useState(false); // Bannière de compte à rebours
+    const [countdownValue, setCountdownValue] = useState(3); // Valeur du compte à rebours
+    const [showGameOverModal, setShowGameOverModal] = useState(false); // Modal de fin de partie
+    const [gameResult, setGameResult] = useState<any>(null); // Résultat de la partie
     const userId = localStorage.getItem('userId');
 
     // Initialisation Socket.IO et chargement des données
@@ -60,7 +64,6 @@ export default function MultiplayerGame() {
 
         onGameStarted((data: GameStartedData) => {
             console.log('[DEBUG] onGameStarted appelé, data =', data);
-            // Correction: si le backend ne renvoie que les IDs, on affiche "Vous" ou le prénom du rejoignant
             const completeGame = {
                 ...data.game,
                 creator: typeof data.game.creator === 'string' ? {
@@ -81,18 +84,33 @@ export default function MultiplayerGame() {
                     : undefined
             };
             setCurrentGame(completeGame);
-            // Correction logique de tour : le créateur commence toujours
             const isMyTurn = String(completeGame.creator._id) === String(userId);
             console.log('[DEBUG] Comparaison tour : creator._id =', completeGame.creator._id, 'userId =', userId, 'isMyTurn =', isMyTurn);
             setIsMyTurn(isMyTurn);
-            setGameStarted(true);
             setTimeRemaining(data.timeLimit);
             setGames(prev => prev.filter(game => game._id !== data.game._id));
-            setNotification({
-                message: `Partie démarrée! ${isMyTurn ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
-                type: 'success'
-            });
-            // Log état après update
+            
+            // Afficher la bannière de compte à rebours
+            setShowCountdownBanner(true);
+            setCountdownValue(3);
+            
+            // Démarrer le compte à rebours
+            const countdownInterval = setInterval(() => {
+                setCountdownValue(prev => {
+                    if (prev <= 1) {
+                        clearInterval(countdownInterval);
+                        setShowCountdownBanner(false);
+                        setGameStarted(true);
+                        setNotification({
+                            message: `Partie démarrée! ${isMyTurn ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
+                            type: 'success'
+                        });
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+            
             setTimeout(() => {
                 console.log('[DEBUG] Après onGameStarted: currentGame =', completeGame, 'gameStarted =', true, 'isMyTurn =', isMyTurn);
             }, 0);
@@ -162,6 +180,18 @@ export default function MultiplayerGame() {
                 const winnerName = isWinner ? 'Vous' :
                     (data.game.winner === data.game.creator._id ? data.game.creator.firstName : data.game.opponent?.firstName);
 
+                // Afficher le modal de fin de partie après 3 secondes
+                setTimeout(() => {
+                    setGameResult({
+                        winner: winnerName,
+                        stake: data.game.stake,
+                        creatorNumber: data.game.creatorNumber,
+                        opponentNumber: data.game.opponentNumber,
+                        isWinner
+                    });
+                    setShowGameOverModal(true);
+                }, 3000);
+
                 setNotification({
                     message: `${winnerName} gagne la partie et reçoit ${data.game.stake} points !`,
                     type: isWinner ? 'success' : 'error'
@@ -178,15 +208,17 @@ export default function MultiplayerGame() {
                     });
                 }
             }
-            // Notification du nombre généré en temps réel
+            // Notification du nombre généré en temps réel avec délai
             if (data.lastPlayedNumber !== undefined && data.lastPlayer) {
                 const isMe = String(data.lastPlayer) === String(userId);
-                setNotification({
-                    message: isMe
-                        ? `Vous avez généré le nombre ${data.lastPlayedNumber}`
-                        : `L'adversaire a généré le nombre ${data.lastPlayedNumber}`,
-                    type: isMe ? 'success' : 'info'
-                });
+                setTimeout(() => {
+                    setNotification({
+                        message: isMe
+                            ? `Vous avez généré le nombre ${data.lastPlayedNumber}`
+                            : `L'adversaire a généré le nombre ${data.lastPlayedNumber}`,
+                        type: isMe ? 'success' : 'info'
+                    });
+                }, 1000); // Délai de 1s pour la notification
             }
         });
 
@@ -396,6 +428,10 @@ export default function MultiplayerGame() {
     const handlePlayTurn = async () => {
         if (!currentGame || !isMyTurn) return;
         setIsGenerating(true);
+        
+        // Délai de 3 secondes pour l'animation
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
         const { success, error } = await apiService.game.playMultiplayerTurn(currentGame._id);
         setIsGenerating(false);
         if (success) {
@@ -536,8 +572,18 @@ export default function MultiplayerGame() {
         }
     }
 
+    const closeGameOverModal = () => {
+        setShowGameOverModal(false);
+        setGameResult(null);
+        setCurrentGame(null);
+        setGameStarted(false);
+        setIsMyTurn(false);
+        setTimeRemaining(null);
+        loadWaitingGames();
+    };
+
     // Interface d'attente (quand on a créé une partie mais qu'elle n'a pas encore commencé)
-    if (currentGame && !gameStarted && currentGame.creator) {
+    if (currentGame && !gameStarted && currentGame.creator && !showCountdownBanner) {
         return (
             <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-8 mt-6 transition-all duration-300 hover:shadow-2xl">
                 <div className="text-center mb-8">
@@ -586,26 +632,61 @@ export default function MultiplayerGame() {
                     >
                         {currentGame.creator?._id === userId ? 'Annuler la partie' : 'Quitter'}
                     </button>
+                </div>
+            </div>
+        );
+    }
+
+    // Bannière de compte à rebours
+    if (showCountdownBanner) {
+        return (
+            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-8 mt-6 transition-all duration-300 hover:shadow-2xl">
+                <div className="text-center mb-8">
+                    <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
+                        La partie va commencer !
+                    </h2>
+                    <div className="text-6xl font-bold text-indigo-600 mb-4 animate-pulse">
+                        {countdownValue}
+                    </div>
+                    <p className="text-gray-600">Préparez-vous...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Modal de fin de partie
+    if (showGameOverModal && gameResult) {
+        return (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 text-center">
+                    <h3 className="text-2xl font-bold mb-6 text-indigo-700">
+                        {gameResult.isWinner ? '🎉 Victoire !' : '😔 Défaite'}
+                    </h3>
                     
-                    {currentGame.opponent && (
+                    <div className="mb-6">
+                        <p className="text-lg font-semibold mb-2">
+                            {gameResult.winner} gagne avec {gameResult.stake} points !
+                        </p>
+                        <div className="grid grid-cols-2 gap-4 mt-4">
+                            <div className="bg-gray-100 p-3 rounded-lg">
+                                <p className="text-sm text-gray-600">Joueur 1</p>
+                                <p className="text-xl font-bold">{gameResult.creatorNumber}</p>
+                            </div>
+                            <div className="bg-gray-100 p-3 rounded-lg">
+                                <p className="text-sm text-gray-600">Joueur 2</p>
+                                <p className="text-xl font-bold">{gameResult.opponentNumber}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-4">
                         <button
-                            onClick={checkAndStartGame}
-                            className="px-6 py-2 rounded-xl font-bold transition-all duration-300 bg-green-500 text-white hover:bg-green-600"
+                            onClick={closeGameOverModal}
+                            className="flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-300 bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700"
                         >
-                            Démarrer la partie
+                            Retour à l'accueil
                         </button>
-                    )}
-                    
-                    {/* Bouton de débogage temporaire */}
-                    <button
-                        onClick={() => {
-                            console.log('État actuel:', { currentGame, gameStarted, isMyTurn });
-                            checkAndStartGame();
-                        }}
-                        className="px-4 py-2 rounded-xl font-bold transition-all duration-300 bg-yellow-500 text-white hover:bg-yellow-600 text-sm"
-                    >
-                        Debug
-                    </button>
+                    </div>
                 </div>
             </div>
         );
@@ -646,6 +727,9 @@ export default function MultiplayerGame() {
                                 <span className="italic text-gray-400">En attente...</span>
                             }
                         </p>
+                        <p className="text-sm text-gray-500 mt-1">
+                            {isMyTurn && currentGame.creator?._id === userId ? "En train de jouer..." : "En attente..."}
+                        </p>
                     </div>
 
                     <div className={`bg-white border ${currentGame.opponent?._id === userId ? 'border-blue-300' : 'border-gray-100'} p-6 rounded-2xl shadow flex flex-col items-center`}>
@@ -660,6 +744,9 @@ export default function MultiplayerGame() {
                                 <span className="italic text-gray-400">En attente...</span>
                             }
                         </p>
+                        <p className="text-sm text-gray-500 mt-1">
+                            {isMyTurn && currentGame.opponent?._id === userId ? "En train de jouer..." : "En attente..."}
+                        </p>
                     </div>
                 </div>
 
@@ -668,7 +755,6 @@ export default function MultiplayerGame() {
                         <GameCountdown
                             timeLimit={timeRemaining}
                             onTimeout={handleTimeout}
-                            // Stoppe le timer si le joueur a déjà joué
                             key={isMyTurn ? 'my-turn' : 'not-my-turn'}
                         />
                         <div className="flex justify-center mt-6">
