@@ -118,7 +118,8 @@ export default function MultiplayerGame() {
 
         onGameUpdate((data: GameUpdateData) => {
             console.log('[DEBUG] onGameUpdate appelé, data =', data);
-            // Correction: enrichit creator et opponent pour l'affichage
+
+            // Normalisation des données du jeu
             const updatedGame = {
                 ...data.game,
                 creator: typeof data.game.creator === 'string' ? {
@@ -138,39 +139,33 @@ export default function MultiplayerGame() {
                     }
                     : undefined
             };
+
+            // Mise à jour de l'état du jeu
             setCurrentGame(updatedGame);
-            // Correction logique de tour : utilise nextPlayer si présent, sinon currentPlayer
+
+            // Détermination du tour du joueur
             let isMyTurn = false;
-            if (typeof data.nextPlayer === 'string') {
-                isMyTurn = data.nextPlayer === userId;
-            } else if (typeof data.currentPlayer === 'string') {
-                isMyTurn = data.currentPlayer === userId;
-            } else if (updatedGame.creator && updatedGame.creator._id === userId) {
-                // fallback: créateur commence
-                isMyTurn = updatedGame.creator._id === userId && !updatedGame.creatorNumber;
+            if (data.nextPlayer) {
+                isMyTurn = String(data.nextPlayer) === String(userId);
+            } else if (data.currentPlayer) {
+                // Si nextPlayer n'est pas défini, on vérifie si c'est à notre tour
+                isMyTurn = String(data.currentPlayer) === String(userId);
             }
+
+            console.log('[TURN] isMyTurn:', isMyTurn,
+                'nextPlayer:', data.nextPlayer,
+                'currentPlayer:', data.currentPlayer,
+                'userId:', userId);
+
             setIsMyTurn(isMyTurn);
-            // Log état après update
-            setTimeout(() => {
-                console.log('[DEBUG] Après onGameUpdate: currentGame =', updatedGame, 'gameStarted =', gameStarted, 'isMyTurn =', isMyTurn);
-            }, 0);
+            setGameStarted(true);
 
-            // Forcer la bascule sur l'interface de jeu dès que la partie est en 'playing' et qu'il y a deux joueurs
-            if (updatedGame.status === 'playing' && updatedGame.opponent) {
-                setGameStarted(true);
-                setIsMyTurn(updatedGame.creator._id === userId);
-                setTimeRemaining(updatedGame.timeLimit);
-                setNotification({
-                    message: `Partie démarrée! ${updatedGame.creator._id === userId ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
-                    type: 'success'
-                });
-                setGames(prev => prev.filter(game => game._id !== updatedGame._id));
-                setTimeout(() => {
-                    console.log('[DEBUG] Bascule interface de jeu: currentGame =', updatedGame, 'gameStarted =', true, 'isMyTurn =', updatedGame.creator._id === userId);
-                }, 0);
-                return;
+            // Gestion du temps restant
+            if (data.timeLimit) {
+                setTimeRemaining(data.timeLimit);
             }
 
+            // Gestion de la fin de partie
             if (data.finished) {
                 setGameStarted(false);
                 setIsMyTurn(false);
@@ -178,9 +173,11 @@ export default function MultiplayerGame() {
 
                 const isWinner = data.game.winner === userId;
                 const winnerName = isWinner ? 'Vous' :
-                    (data.game.winner === data.game.creator._id ? data.game.creator.firstName : data.game.opponent?.firstName);
+                    (data.game.winner === data.game.creator._id ?
+                        data.game.creator.firstName :
+                        data.game.opponent?.firstName);
 
-                // Afficher le modal de fin de partie après 3 secondes
+                // Affichage du résultat après un délai
                 setTimeout(() => {
                     setGameResult({
                         winner: winnerName,
@@ -197,18 +194,17 @@ export default function MultiplayerGame() {
                     type: isWinner ? 'success' : 'error'
                 });
 
-                // Recharger le solde utilisateur
+                // Rechargement du solde
                 loadUserBalance();
-            } else {
-                setIsMyTurn(data.nextPlayer === userId);
-                if (data.timeout) {
-                    setNotification({
-                        message: 'Temps écoulé! Le joueur a perdu automatiquement.',
-                        type: 'error'
-                    });
-                }
+            } else if (data.timeout) {
+                // Gestion du timeout
+                setNotification({
+                    message: 'Temps écoulé! Le joueur a perdu automatiquement.',
+                    type: 'error'
+                });
             }
-            // Notification du nombre généré en temps réel avec délai
+
+            // Notification du nombre généré
             if (data.lastPlayedNumber !== undefined && data.lastPlayer) {
                 const isMe = String(data.lastPlayer) === String(userId);
                 setTimeout(() => {
@@ -218,7 +214,12 @@ export default function MultiplayerGame() {
                             : `L'adversaire a généré le nombre ${data.lastPlayedNumber}`,
                         type: isMe ? 'success' : 'info'
                     });
-                }, 1000); // Délai de 1s pour la notification
+                }, 1000);
+            }
+
+            // Mise à jour de la liste des parties si nécessaire
+            if (updatedGame.status === 'playing' && updatedGame.opponent) {
+                setGames(prev => prev.filter(game => game._id !== updatedGame._id));
             }
         });
 
@@ -428,12 +429,34 @@ export default function MultiplayerGame() {
     const handlePlayTurn = async () => {
         if (!currentGame || !isMyTurn) return;
         setIsGenerating(true);
-        
-        // Délai de 3 secondes pour l'animation
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
+
+        // Animation de génération de nombre (comme en mode solo)
+        const animationDuration = 3000; // 3 secondes
+        const startTime = Date.now();
+
+        const animateNumber = () => {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / animationDuration, 1);
+
+            if (progress < 1) {
+                // Générer un nombre aléatoire pour l'animation
+                const randomNum = Math.floor(Math.random() * 100);
+                setNotification({
+                    message: `Génération en cours... ${randomNum}`,
+                    type: 'info'
+                });
+                requestAnimationFrame(animateNumber);
+            }
+        };
+
+        animateNumber();
+
+        // Attendre la fin de l'animation
+        await new Promise(resolve => setTimeout(resolve, animationDuration));
+
         const { success, error } = await apiService.game.playMultiplayerTurn(currentGame._id);
         setIsGenerating(false);
+
         if (success) {
             playTurn(currentGame._id);
             setIsMyTurn(false);
