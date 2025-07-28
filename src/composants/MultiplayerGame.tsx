@@ -137,7 +137,10 @@ export default function MultiplayerGame() {
         );
 
         if (success && data) {
+            // Mettre à jour la liste des parties
             setGames(prev => [...prev, data.data]);
+            // Définir la partie courante et rejoindre la room
+            setCurrentGame(data.data);
             joinGameRoom(data.data._id);
             setShowCreateModal(false);
             setNotification({
@@ -156,15 +159,6 @@ export default function MultiplayerGame() {
         const game = games.find(g => g._id === gameId);
         if (!game) return;
 
-        // Empêcher de rejoindre sa propre partie
-        if (game.creator._id === userId) {
-            setNotification({
-                message: 'Vous ne pouvez pas rejoindre votre propre partie',
-                type: 'error'
-            });
-            return;
-        }
-
         // Vérifier le solde
         if (userBalance < game.stake) {
             setNotification({
@@ -177,6 +171,7 @@ export default function MultiplayerGame() {
         const { success, data, error } = await apiService.game.joinMultiplayerGame(gameId);
 
         if (success && data) {
+            // Rejoindre la room et attendre l'événement gameStarted
             joinGameRoom(gameId);
             setNotification({
                 message: 'Partie rejointe! La partie va démarrer...',
@@ -238,59 +233,48 @@ export default function MultiplayerGame() {
         loadWaitingGames();
     };
 
-    // Modal de création de partie
-    if (showCreateModal) {
+    // Interface d'attente (quand on a créé une partie mais qu'elle n'a pas encore commencé)
+    if (currentGame && !gameStarted && currentGame.creator._id === userId) {
         return (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
-                    <h3 className="text-2xl font-bold text-center mb-6 text-indigo-700">
-                        Créer une nouvelle partie
-                    </h3>
+            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-8 mt-6 transition-all duration-300 hover:shadow-2xl">
+                <div className="text-center mb-8">
+                    <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
+                        Partie créée - Mise: {currentGame.stake} points
+                    </h2>
+                    <p className="text-gray-600">En attente d'un adversaire...</p>
+                </div>
 
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block mb-2 text-gray-700 font-medium">Mise (points)</label>
-                            <input
-                                type="number"
-                                name="stake"
-                                min="10"
-                                max={userBalance}
-                                value={formData.stake}
-                                onChange={handleFormChange}
-                                className="border p-3 rounded-xl w-full shadow focus:ring-2 focus:ring-indigo-300 transition-all duration-300"
-                            />
-                            <p className="text-sm text-gray-500 mt-1">Solde disponible: {userBalance} points</p>
-                        </div>
+                {notification && (
+                    <Notification
+                        message={notification.message}
+                        type={notification.type}
+                        onClose={() => setNotification(null)}
+                    />
+                )}
 
-                        <div>
-                            <label className="block mb-2 text-gray-700 font-medium">Temps de réflexion (secondes)</label>
-                            <input
-                                type="number"
-                                name="timeLimit"
-                                min="10"
-                                max="300"
-                                value={formData.timeLimit}
-                                onChange={handleFormChange}
-                                className="border p-3 rounded-xl w-full shadow focus:ring-2 focus:ring-purple-300 transition-all duration-300"
-                            />
-                        </div>
+                <div className="grid grid-cols-2 gap-6 mb-8">
+                    <div className="bg-white border border-blue-300 p-6 rounded-2xl shadow flex flex-col items-center">
+                        <h3 className="font-semibold text-lg mb-2 text-indigo-700 flex items-center gap-2">
+                            👤 Vous (Créateur)
+                        </h3>
+                        <p className="text-gray-600 italic">En attente de l'adversaire...</p>
                     </div>
 
-                    <div className="flex gap-4 mt-6">
-                        <button
-                            onClick={() => setShowCreateModal(false)}
-                            className="flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-300 bg-gray-200 text-gray-700 hover:bg-gray-300"
-                        >
-                            Annuler
-                        </button>
-                        <button
-                            onClick={createGame}
-                            disabled={formData.stake > userBalance}
-                            className="flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-300 bg-gradient-to-r from-green-400 to-green-600 text-white hover:from-green-500 hover:to-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            Créer
-                        </button>
+                    <div className="bg-white border border-gray-100 p-6 rounded-2xl shadow flex flex-col items-center">
+                        <h3 className="font-semibold text-lg mb-2 text-purple-700 flex items-center gap-2">
+                            <span className="italic text-gray-400">Adversaire</span>
+                        </h3>
+                        <p className="text-gray-600 italic">En attente...</p>
                     </div>
+                </div>
+
+                <div className="flex justify-center mt-6">
+                    <button
+                        onClick={leaveGame}
+                        className="px-6 py-2 rounded-xl font-bold transition-all duration-300 bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    >
+                        Annuler la partie
+                    </button>
                 </div>
             </div>
         );
@@ -375,6 +359,64 @@ export default function MultiplayerGame() {
         );
     }
 
+    // Modal de création de partie
+    if (showCreateModal) {
+        return (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
+                    <h3 className="text-2xl font-bold text-center mb-6 text-indigo-700">
+                        Créer une nouvelle partie
+                    </h3>
+
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block mb-2 text-gray-700 font-medium">Mise (points)</label>
+                            <input
+                                type="number"
+                                name="stake"
+                                min="10"
+                                max={userBalance}
+                                value={formData.stake}
+                                onChange={handleFormChange}
+                                className="border p-3 rounded-xl w-full shadow focus:ring-2 focus:ring-indigo-300 transition-all duration-300"
+                            />
+                            <p className="text-sm text-gray-500 mt-1">Solde disponible: {userBalance} points</p>
+                        </div>
+
+                        <div>
+                            <label className="block mb-2 text-gray-700 font-medium">Temps de réflexion (secondes)</label>
+                            <input
+                                type="number"
+                                name="timeLimit"
+                                min="10"
+                                max="300"
+                                value={formData.timeLimit}
+                                onChange={handleFormChange}
+                                className="border p-3 rounded-xl w-full shadow focus:ring-2 focus:ring-purple-300 transition-all duration-300"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex gap-4 mt-6">
+                        <button
+                            onClick={() => setShowCreateModal(false)}
+                            className="flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-300 bg-gray-200 text-gray-700 hover:bg-gray-300"
+                        >
+                            Annuler
+                        </button>
+                        <button
+                            onClick={createGame}
+                            disabled={formData.stake > userBalance}
+                            className="flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-300 bg-gradient-to-r from-green-400 to-green-600 text-white hover:from-green-500 hover:to-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Créer
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     // Interface principale (liste des parties)
     return (
         <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-8 mt-6 transition-all duration-300 hover:shadow-2xl">
@@ -410,9 +452,6 @@ export default function MultiplayerGame() {
                                         {game.creator._id === userId && ' (Votre partie)'}
                                     </p>
                                     <p className="text-gray-600">Mise: {game.stake} points - Temps: {game.timeLimit}s</p>
-                                    {game.creator._id === userId && (
-                                        <p className="text-blue-500 text-sm mt-1">En attente d'un adversaire...</p>
-                                    )}
                                 </div>
                                 <button
                                     onClick={() => joinGame(game._id)}
