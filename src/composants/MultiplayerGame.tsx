@@ -1,14 +1,31 @@
 import React from 'react';
 import { useState, useEffect } from 'react';
 import { apiService } from '../backend/backend';
-import { socket, connectSocket, disconnectSocket } from '../backend/socket';
+import {
+    socket,
+    connectSocket,
+    disconnectSocket,
+    joinGameRoom,
+    leaveGameRoom,
+    playTurn,
+    onJoinedRoom,
+    onGameStarted,
+    onGameUpdate,
+    onError,
+    cleanupSocketListeners,
+    GameUpdateData,
+    GameStartedData
+} from '../backend/socket';
 import Notification from './notification';
 import GameCountdown from './GameCountdown';
 
 export default function MultiplayerGame() {
     const [games, setGames] = useState<any[]>([]);
     const [currentGame, setCurrentGame] = useState<any>(null);
-    const [number, setNumber] = useState<number | null>(null);
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [isMyTurn, setIsMyTurn] = useState(false);
+    const [gameStarted, setGameStarted] = useState(false);
+    const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
     const [notification, setNotification] = useState<{
         message: string;
         type: 'success' | 'error' | 'info';
@@ -17,60 +34,90 @@ export default function MultiplayerGame() {
         stake: 50,
         timeLimit: 60
     });
+    const [userBalance, setUserBalance] = useState<number>(0);
 
-    // Initialisation Socket.IO
+    // Initialisation Socket.IO et chargement des données
     useEffect(() => {
         connectSocket();
         loadWaitingGames();
+        loadUserBalance();
 
-        socket.on('game-created', (game: any) => {
-            setGames(prev => [...prev, game]);
+        // Écouteurs d'événements Socket.IO
+        onJoinedRoom((data) => {
+            console.log('Rejoint la room:', data.room);
         });
 
-        socket.on('player-joined', (game: any) => {
-            setCurrentGame(game);
+        onGameStarted((data: GameStartedData) => {
+            console.log('Partie démarrée:', data);
+            setCurrentGame(data.game);
+            setGameStarted(true);
+            setIsMyTurn(data.currentPlayer === localStorage.getItem('userId'));
+            setTimeRemaining(data.timeLimit);
+
+            // Retirer la partie de la liste des parties en attente
+            setGames(prev => prev.filter(game => game._id !== data.game._id));
+
             setNotification({
-                message: `Partie rejointe! Temps limite: ${game.timeLimit}s`,
+                message: `Partie démarrée! ${isMyTurn ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
                 type: 'success'
             });
         });
 
-        socket.on('turn-played', (gameId: string, playerId: string, playedNumber: number) => {
-            if (currentGame?._id === gameId) {
-                const isCreator = playerId === currentGame.creator._id;
-                setCurrentGame(prev => ({
-                    ...prev,
-                    [isCreator ? 'creatorNumber' : 'opponentNumber']: playedNumber
-                }));
+        onGameUpdate((data: GameUpdateData) => {
+            console.log('Mise à jour du jeu:', data);
+            setCurrentGame(data.game);
+
+            if (data.finished) {
+                setGameStarted(false);
+                setIsMyTurn(false);
+                setTimeRemaining(null);
+
+                const isWinner = data.game.winner === localStorage.getItem('userId');
+                const winnerName = isWinner ? 'Vous' :
+                    (data.game.winner === data.game.creator._id ? data.game.creator.firstName : data.game.opponent?.firstName);
+
+                setNotification({
+                    message: `${winnerName} gagne la partie et reçoit ${data.game.stake} points !`,
+                    type: isWinner ? 'success' : 'error'
+                });
+
+                // Recharger le solde utilisateur
+                loadUserBalance();
+            } else {
+                setIsMyTurn(data.nextPlayer === localStorage.getItem('userId'));
+                if (data.timeout) {
+                    setNotification({
+                        message: 'Temps écoulé! Le joueur a perdu automatiquement.',
+                        type: 'error'
+                    });
+                }
             }
         });
 
-        socket.on('game-ended', (gameId: string, winnerId: string) => {
-            if (currentGame?._id === gameId) {
-                const isWinner = winnerId === localStorage.getItem('userId');
-                setNotification({
-                    message: isWinner
-                        ? `Vous avez gagné ${currentGame.stake} points!`
-                        : `Vous avez perdu ${currentGame.stake} points...`,
-                    type: isWinner ? 'success' : 'error'
-                });
-                setCurrentGame(prev => ({ ...prev, status: 'finished', winner: winnerId }));
-            }
+        onError((data) => {
+            setNotification({
+                message: data.message,
+                type: 'error'
+            });
         });
 
         return () => {
+            cleanupSocketListeners();
             disconnectSocket();
-            socket.off('game-created');
-            socket.off('player-joined');
-            socket.off('turn-played');
-            socket.off('game-ended');
         };
-    }, [currentGame]);
+    }, []);
 
     const loadWaitingGames = async () => {
         const { success, data } = await apiService.game.listWaitingGames();
         if (success && data) {
             setGames(data.data || []);
+        }
+    };
+
+    const loadUserBalance = async () => {
+        const { success, data } = await apiService.user.getPointsBalance();
+        if (success && data) {
+            setUserBalance(data.data.points);
         }
     };
 
@@ -81,8 +128,13 @@ export default function MultiplayerGame() {
         );
 
         if (success && data) {
-            socket.emit('join-game', data.data._id);
             setCurrentGame(data.data);
+            joinGameRoom(data.data._id);
+            setShowCreateModal(false);
+            setNotification({
+                message: 'Partie créée! En attente d\'un adversaire...',
+                type: 'success'
+            });
         } else {
             setNotification({
                 message: error || 'Erreur lors de la création',
@@ -92,11 +144,25 @@ export default function MultiplayerGame() {
     };
 
     const joinGame = async (gameId: string) => {
+        // Vérifier le solde avant de rejoindre
+        const game = games.find(g => g._id === gameId);
+        if (game && userBalance < game.stake) {
+            setNotification({
+                message: `Solde insuffisant pour rejoindre cette partie. Vous avez ${userBalance} points, la mise est de ${game.stake} points.`,
+                type: 'error'
+            });
+            return;
+        }
+
         const { success, data, error } = await apiService.game.joinMultiplayerGame(gameId);
 
         if (success && data) {
-            socket.emit('join-game', gameId);
             setCurrentGame(data.data);
+            joinGameRoom(gameId);
+            setNotification({
+                message: 'Partie rejointe! La partie va démarrer...',
+                type: 'success'
+            });
         } else {
             setNotification({
                 message: error || 'Erreur lors de la jointure',
@@ -105,22 +171,33 @@ export default function MultiplayerGame() {
         }
     };
 
-    const playTurn = async () => {
-        if (!currentGame || number === null) return;
+    const handlePlayTurn = async () => {
+        if (!currentGame || !isMyTurn) return;
 
-        const { success, error } = await apiService.game.playMultiplayerTurn(
-            currentGame._id,
-            number
-        );
+        const { success, error } = await apiService.game.playMultiplayerTurn(currentGame._id);
 
         if (success) {
-            socket.emit('play-turn', currentGame._id, number);
+            playTurn(currentGame._id);
+            setIsMyTurn(false);
+            setNotification({
+                message: 'Nombre généré! En attente de l\'autre joueur...',
+                type: 'info'
+            });
         } else {
             setNotification({
                 message: error || 'Erreur lors du tour',
                 type: 'error'
             });
         }
+    };
+
+    const handleTimeout = () => {
+        setNotification({
+            message: 'Temps écoulé! Vous avez perdu automatiquement.',
+            type: 'error'
+        });
+        setIsMyTurn(false);
+        setTimeRemaining(null);
     };
 
     const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -131,13 +208,84 @@ export default function MultiplayerGame() {
         }));
     };
 
-    if (currentGame) {
+    const leaveGame = () => {
+        if (currentGame) {
+            leaveGameRoom(currentGame._id);
+        }
+        setCurrentGame(null);
+        setGameStarted(false);
+        setIsMyTurn(false);
+        setTimeRemaining(null);
+        loadWaitingGames();
+    };
+
+    // Modal de création de partie
+    if (showCreateModal) {
+        return (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
+                    <h3 className="text-2xl font-bold text-center mb-6 text-indigo-700">
+                        Créer une nouvelle partie
+                    </h3>
+
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block mb-2 text-gray-700 font-medium">Mise (points)</label>
+                            <input
+                                type="number"
+                                name="stake"
+                                min="10"
+                                max={userBalance}
+                                value={formData.stake}
+                                onChange={handleFormChange}
+                                className="border p-3 rounded-xl w-full shadow focus:ring-2 focus:ring-indigo-300 transition-all duration-300"
+                            />
+                            <p className="text-sm text-gray-500 mt-1">Solde disponible: {userBalance} points</p>
+                        </div>
+
+                        <div>
+                            <label className="block mb-2 text-gray-700 font-medium">Temps de réflexion (secondes)</label>
+                            <input
+                                type="number"
+                                name="timeLimit"
+                                min="10"
+                                max="300"
+                                value={formData.timeLimit}
+                                onChange={handleFormChange}
+                                className="border p-3 rounded-xl w-full shadow focus:ring-2 focus:ring-purple-300 transition-all duration-300"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex gap-4 mt-6">
+                        <button
+                            onClick={() => setShowCreateModal(false)}
+                            className="flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-300 bg-gray-200 text-gray-700 hover:bg-gray-300"
+                        >
+                            Annuler
+                        </button>
+                        <button
+                            onClick={createGame}
+                            disabled={formData.stake > userBalance}
+                            className="flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-300 bg-gradient-to-r from-green-400 to-green-600 text-white hover:from-green-500 hover:to-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Créer
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Interface de jeu en cours
+    if (currentGame && gameStarted) {
         return (
             <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-8 mt-6 transition-all duration-300 hover:shadow-2xl">
                 <div className="text-center mb-8">
                     <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
-                        Partie {currentGame._id.slice(-6)} - Mise: {currentGame.stake} points
+                        Partie en cours - Mise: {currentGame.stake} points
                     </h2>
+                    <p className="text-gray-600">Temps de réflexion: {currentGame.timeLimit} secondes</p>
                 </div>
 
                 {notification && (
@@ -150,102 +298,86 @@ export default function MultiplayerGame() {
 
                 <div className="grid grid-cols-2 gap-6 mb-8">
                     <div className="bg-white border border-gray-100 p-6 rounded-2xl shadow flex flex-col items-center">
-                        <h3 className="font-semibold text-lg mb-2 text-indigo-700 flex items-center gap-2">👤 {currentGame.creator.firstName}</h3>
-                        <p className="text-gray-600 font-mono text-xl">{currentGame.creatorNumber !== undefined ?
-                            `Nombre: ${currentGame.creatorNumber}` : <span className="italic text-gray-400">En attente...</span>}</p>
+                        <h3 className="font-semibold text-lg mb-2 text-indigo-700 flex items-center gap-2">
+                            👤 {currentGame.creator.firstName}
+                            {currentGame.creator._id === localStorage.getItem('userId') && ' (Vous)'}
+                        </h3>
+                        <p className="text-gray-600 font-mono text-xl">
+                            {currentGame.creatorNumber !== undefined ?
+                                `Nombre: ${currentGame.creatorNumber}` :
+                                <span className="italic text-gray-400">En attente...</span>
+                            }
+                        </p>
                     </div>
+
                     <div className="bg-white border border-gray-100 p-6 rounded-2xl shadow flex flex-col items-center">
-                        <h3 className="font-semibold text-lg mb-2 text-purple-700 flex items-center gap-2">{currentGame.opponent?.firstName ? `👥 ${currentGame.opponent.firstName}` : <span className="italic text-gray-400">En attente...</span>}</h3>
-                        <p className="text-gray-600 font-mono text-xl">{currentGame.opponentNumber !== undefined ?
-                            `Nombre: ${currentGame.opponentNumber}` : <span className="italic text-gray-400">En attente...</span>}</p>
+                        <h3 className="font-semibold text-lg mb-2 text-purple-700 flex items-center gap-2">
+                            {currentGame.opponent?.firstName ?
+                                `👥 ${currentGame.opponent.firstName}` :
+                                <span className="italic text-gray-400">En attente...</span>
+                            }
+                            {currentGame.opponent?._id === localStorage.getItem('userId') && ' (Vous)'}
+                        </h3>
+                        <p className="text-gray-600 font-mono text-xl">
+                            {currentGame.opponentNumber !== undefined ?
+                                `Nombre: ${currentGame.opponentNumber}` :
+                                <span className="italic text-gray-400">En attente...</span>
+                            }
+                        </p>
                     </div>
                 </div>
 
-                {currentGame.status === 'playing' && (
+                {isMyTurn && timeRemaining !== null && (
                     <>
                         <GameCountdown
-                            timeLimit={currentGame.timeLimit}
-                            onTimeout={() => setNotification({
-                                message: 'Temps écoulé!',
-                                type: 'error'
-                            })}
+                            timeLimit={timeRemaining}
+                            onTimeout={handleTimeout}
                         />
-
-                        <div className="flex gap-4 justify-center mt-6">
-                            <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={number || ''}
-                                onChange={(e) => setNumber(parseInt(e.target.value))}
-                                className="border p-3 rounded-xl text-lg w-32 shadow focus:ring-2 focus:ring-indigo-300 transition-all duration-300"
-                                placeholder="0-100"
-                            />
+                        <div className="flex justify-center mt-6">
                             <button
-                                onClick={playTurn}
+                                onClick={handlePlayTurn}
                                 className="px-8 py-3 rounded-2xl font-bold text-lg transition-all duration-300 transform bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 hover:scale-105 shadow-lg hover:shadow-xl"
                             >
-                                Jouer
+                                Générer mon nombre
                             </button>
                         </div>
                     </>
                 )}
 
-                {currentGame.status === 'finished' && (
-                    <div className="mt-8 p-6 bg-gradient-to-r from-green-100 to-green-200 rounded-2xl shadow text-center">
-                        <h3 className="text-2xl font-bold text-green-700 animate-bounce">
-                            {currentGame.winner === localStorage.getItem('userId') ?
-                                '🎉 Vous avez gagné !' : '😢 Vous avez perdu...'}
-                        </h3>
-                    </div>
-                )}
+                <div className="flex justify-center mt-6">
+                    <button
+                        onClick={leaveGame}
+                        className="px-6 py-2 rounded-xl font-bold transition-all duration-300 bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    >
+                        Quitter la partie
+                    </button>
+                </div>
             </div>
         );
     }
 
+    // Interface principale (liste des parties)
     return (
         <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-8 mt-6 transition-all duration-300 hover:shadow-2xl">
             <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">Mode Multijoueur</h2>
+                <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
+                    Mode Multijoueur
+                </h2>
+                <p className="text-gray-600">Solde disponible: {userBalance} points</p>
             </div>
 
             <div className="mb-10">
-                <h3 className="font-semibold mb-2 text-lg text-indigo-700">Créer une partie</h3>
-                <div className="grid grid-cols-2 gap-6 mb-4">
-                    <div>
-                        <label className="block mb-1 text-gray-700 font-medium">Mise (points)</label>
-                        <input
-                            type="number"
-                            name="stake"
-                            min="10"
-                            value={formData.stake}
-                            onChange={handleFormChange}
-                            className="border p-3 rounded-xl w-full shadow focus:ring-2 focus:ring-indigo-300 transition-all duration-300"
-                        />
-                    </div>
-                    <div>
-                        <label className="block mb-1 text-gray-700 font-medium">Temps limite (s)</label>
-                        <input
-                            type="number"
-                            name="timeLimit"
-                            min="10"
-                            max="300"
-                            value={formData.timeLimit}
-                            onChange={handleFormChange}
-                            className="border p-3 rounded-xl w-full shadow focus:ring-2 focus:ring-purple-300 transition-all duration-300"
-                        />
-                    </div>
-                </div>
+                <h3 className="font-semibold mb-4 text-lg text-indigo-700">Créer une partie</h3>
                 <button
-                    onClick={createGame}
+                    onClick={() => setShowCreateModal(true)}
                     className="px-8 py-3 rounded-2xl font-bold text-lg transition-all duration-300 transform bg-gradient-to-r from-green-400 to-green-600 text-white hover:from-green-500 hover:to-green-700 hover:scale-105 shadow-lg hover:shadow-xl"
                 >
-                    ➕ Créer une partie
+                    ➕ Créer une nouvelle partie
                 </button>
             </div>
 
             <div>
-                <h3 className="font-semibold mb-2 text-lg text-purple-700">Parties en attente</h3>
+                <h3 className="font-semibold mb-4 text-lg text-purple-700">Parties en attente</h3>
                 {games.length > 0 ? (
                     <div className="space-y-4">
                         {games.map(game => (

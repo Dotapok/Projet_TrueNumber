@@ -52,6 +52,27 @@ interface MultiplayerGame {
   opponentNumber?: number;
   winner?: string;
   createdAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+}
+
+interface GameStatus {
+  game: MultiplayerGame;
+  currentPlayer: string | null;
+  timeRemaining: number | null;
+  isMyTurn: boolean;
+  gameState: {
+    creatorPlayed: boolean;
+    opponentPlayed: boolean;
+    finished: boolean;
+  };
+}
+
+interface PlayTurnResponse {
+  number: number;
+  game: MultiplayerGame;
+  finished: boolean;
+  nextPlayer: string | null;
 }
 
 export const apiService = {
@@ -155,6 +176,10 @@ export const apiService = {
     async getGameHistory(): Promise<ApiResponse<GameResult[]>> {
       return apiService.request('/game/history', 'GET');
     },
+
+    async getPointsBalance(): Promise<ApiResponse<{ points: number }>> {
+      return apiService.request('/game/balance', 'GET');
+    },
   },
 
   admin: {
@@ -206,12 +231,34 @@ export const apiService = {
       return apiService.request(`/game/multiplayer/join/${gameId}`, 'POST');
     },
 
-    async playMultiplayerTurn(gameId: string, number: number): Promise<ApiResponse<MultiplayerGame>> {
-      return apiService.request(`/game/multiplayer/play/${gameId}`, 'POST', { number });
+    // CORRIGÉ : Le nombre est généré automatiquement côté serveur
+    async playMultiplayerTurn(gameId: string): Promise<ApiResponse<PlayTurnResponse>> {
+      return apiService.request(`/game/multiplayer/play/${gameId}`, 'POST');
     },
 
-    async getMultiplayerGame(gameId: string): Promise<ApiResponse<MultiplayerGame>> {
-      return apiService.request(`/game/multiplayer/${gameId}`, 'GET');
-    }
+    // NOUVEAU : Obtenir l'état d'une partie
+    async getGameStatus(gameId: string): Promise<ApiResponse<GameStatus>> {
+      return apiService.request(`/game/multiplayer/status/${gameId}`, 'GET');
+    },
+
+    // NOUVEAU : Historique des parties multijoueur
+    async getMultiplayerHistory(page?: number, limit?: number): Promise<ApiResponse<{
+      games: GameResult[];
+      pagination: {
+        total: number;
+        page: number;
+        pages: number;
+        limit: number;
+      };
+    }>> {
+      const params = new URLSearchParams();
+      if (page) params.append('page', page.toString());
+      if (limit) params.append('limit', limit.toString());
+      
+      const queryString = params.toString();
+      const endpoint = `/game/multiplayer/history${queryString ? `?${queryString}` : ''}`;
+      
+      return apiService.request(endpoint, 'GET');
+    },
   },
 };
