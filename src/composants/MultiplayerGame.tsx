@@ -39,6 +39,7 @@ export default function MultiplayerGame() {
     const [isLoading, setIsLoading] = useState(true);
     const [isCreatingGame, setIsCreatingGame] = useState(false); // Ajout pour bouton Créer
     const [joiningGameId, setJoiningGameId] = useState<string | null>(null); // Ajout pour bouton Rejoindre
+    const [isGenerating, setIsGenerating] = useState(false); // Pour l'animation de génération
     const userId = localStorage.getItem('userId');
 
     // Initialisation Socket.IO et chargement des données
@@ -176,6 +177,16 @@ export default function MultiplayerGame() {
                         type: 'error'
                     });
                 }
+            }
+            // Notification du nombre généré en temps réel
+            if (data.lastPlayedNumber !== undefined && data.lastPlayer) {
+                const isMe = String(data.lastPlayer) === String(userId);
+                setNotification({
+                    message: isMe
+                        ? `Vous avez généré le nombre ${data.lastPlayedNumber}`
+                        : `L'adversaire a généré le nombre ${data.lastPlayedNumber}`,
+                    type: isMe ? 'success' : 'info'
+                });
             }
         });
 
@@ -384,9 +395,9 @@ export default function MultiplayerGame() {
 
     const handlePlayTurn = async () => {
         if (!currentGame || !isMyTurn) return;
-
+        setIsGenerating(true);
         const { success, error } = await apiService.game.playMultiplayerTurn(currentGame._id);
-
+        setIsGenerating(false);
         if (success) {
             playTurn(currentGame._id);
             setIsMyTurn(false);
@@ -609,6 +620,11 @@ export default function MultiplayerGame() {
                         Partie en cours - Mise: {currentGame.stake} points
                     </h2>
                     <p className="text-gray-600">Temps de réflexion: {currentGame.timeLimit} secondes</p>
+                    <p className="text-lg font-semibold mt-2">
+                        {isMyTurn
+                            ? "C'est votre tour !"
+                            : "En attente de l'autre joueur..."}
+                    </p>
                 </div>
 
                 {notification && (
@@ -652,13 +668,16 @@ export default function MultiplayerGame() {
                         <GameCountdown
                             timeLimit={timeRemaining}
                             onTimeout={handleTimeout}
+                            // Stoppe le timer si le joueur a déjà joué
+                            key={isMyTurn ? 'my-turn' : 'not-my-turn'}
                         />
                         <div className="flex justify-center mt-6">
                             <button
                                 onClick={handlePlayTurn}
                                 className="px-8 py-3 rounded-2xl font-bold text-lg transition-all duration-300 transform bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 hover:scale-105 shadow-lg hover:shadow-xl"
+                                disabled={isGenerating}
                             >
-                                Générer mon nombre
+                                {isGenerating ? 'Génération...' : 'Générer mon nombre'}
                             </button>
                         </div>
                     </>
