@@ -80,17 +80,19 @@ export default function MultiplayerGame() {
                     : undefined
             };
             setCurrentGame(completeGame);
+            // Correction logique de tour : le créateur commence toujours
+            const isMyTurn = completeGame.creator._id === userId;
+            setIsMyTurn(isMyTurn);
             setGameStarted(true);
-            setIsMyTurn(data.currentPlayer === userId);
             setTimeRemaining(data.timeLimit);
             setGames(prev => prev.filter(game => game._id !== data.game._id));
             setNotification({
-                message: `Partie démarrée! ${data.currentPlayer === userId ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
+                message: `Partie démarrée! ${isMyTurn ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
                 type: 'success'
             });
             // Log état après update
             setTimeout(() => {
-                console.log('[DEBUG] Après onGameStarted: currentGame =', completeGame, 'gameStarted =', true, 'isMyTurn =', data.currentPlayer === userId);
+                console.log('[DEBUG] Après onGameStarted: currentGame =', completeGame, 'gameStarted =', true, 'isMyTurn =', isMyTurn);
             }, 0);
         });
 
@@ -117,9 +119,20 @@ export default function MultiplayerGame() {
                     : undefined
             };
             setCurrentGame(updatedGame);
+            // Correction logique de tour : utilise nextPlayer si présent, sinon currentPlayer
+            let isMyTurn = false;
+            if (typeof data.nextPlayer === 'string') {
+                isMyTurn = data.nextPlayer === userId;
+            } else if (typeof data.currentPlayer === 'string') {
+                isMyTurn = data.currentPlayer === userId;
+            } else if (updatedGame.creator && updatedGame.creator._id === userId) {
+                // fallback: créateur commence
+                isMyTurn = updatedGame.creator._id === userId && !updatedGame.creatorNumber;
+            }
+            setIsMyTurn(isMyTurn);
             // Log état après update
             setTimeout(() => {
-                console.log('[DEBUG] Après onGameUpdate: currentGame =', updatedGame, 'gameStarted =', gameStarted, 'isMyTurn =', updatedGame.creator._id === userId);
+                console.log('[DEBUG] Après onGameUpdate: currentGame =', updatedGame, 'gameStarted =', gameStarted, 'isMyTurn =', isMyTurn);
             }, 0);
 
             // Forcer la bascule sur l'interface de jeu dès que la partie est en 'playing' et qu'il y a deux joueurs
