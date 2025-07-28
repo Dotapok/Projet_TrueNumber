@@ -58,18 +58,26 @@ export default function MultiplayerGame() {
         });
 
         onGameStarted((data: GameStartedData) => {
-            console.log('Partie démarrée:', data);
-            // Correction: si le backend ne renvoie que les IDs, on affiche "Vous" ou "Adversaire" selon l'ID
+            console.log('[DEBUG] onGameStarted appelé, data =', data);
+            // Correction: si le backend ne renvoie que les IDs, on affiche "Vous" ou le prénom du rejoignant
             const completeGame = {
                 ...data.game,
                 creator: typeof data.game.creator === 'string' ? {
                     _id: data.game.creator,
                     firstName: data.game.creator === userId ? 'Vous' : 'Joueur 1'
-                } : data.game.creator,
+                } : {
+                    ...data.game.creator,
+                    firstName: data.game.creator?._id === userId ? 'Vous' : (data.game.creator?.firstName || 'Joueur 1')
+                },
                 opponent: typeof data.game.opponent === 'string' ? {
                     _id: data.game.opponent,
                     firstName: data.game.opponent === userId ? 'Vous' : 'Joueur 2'
                 } : data.game.opponent
+                    ? {
+                        ...data.game.opponent,
+                        firstName: data.game.opponent?._id === userId ? 'Vous' : (data.game.opponent?.firstName || 'Joueur 2')
+                    }
+                    : undefined
             };
             setCurrentGame(completeGame);
             setGameStarted(true);
@@ -80,45 +88,53 @@ export default function MultiplayerGame() {
                 message: `Partie démarrée! ${data.currentPlayer === userId ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
                 type: 'success'
             });
+            // Log état après update
+            setTimeout(() => {
+                console.log('[DEBUG] Après onGameStarted: currentGame =', completeGame, 'gameStarted =', true, 'isMyTurn =', data.currentPlayer === userId);
+            }, 0);
         });
 
         onGameUpdate((data: GameUpdateData) => {
-            console.log('Mise à jour du jeu:', data);
-            setCurrentGame(data.game);
+            console.log('[DEBUG] onGameUpdate appelé, data =', data);
+            // Correction: enrichit creator et opponent pour l'affichage
+            const updatedGame = {
+                ...data.game,
+                creator: typeof data.game.creator === 'string' ? {
+                    _id: data.game.creator,
+                    firstName: data.game.creator === userId ? 'Vous' : 'Joueur 1'
+                } : {
+                    ...data.game.creator,
+                    firstName: data.game.creator?._id === userId ? 'Vous' : (data.game.creator?.firstName || 'Joueur 1')
+                },
+                opponent: typeof data.game.opponent === 'string' ? {
+                    _id: data.game.opponent,
+                    firstName: data.game.opponent === userId ? 'Vous' : 'Joueur 2'
+                } : data.game.opponent
+                    ? {
+                        ...data.game.opponent,
+                        firstName: data.game.opponent?._id === userId ? 'Vous' : (data.game.opponent?.firstName || 'Joueur 2')
+                    }
+                    : undefined
+            };
+            setCurrentGame(updatedGame);
+            // Log état après update
+            setTimeout(() => {
+                console.log('[DEBUG] Après onGameUpdate: currentGame =', updatedGame, 'gameStarted =', gameStarted, 'isMyTurn =', updatedGame.creator._id === userId);
+            }, 0);
 
-            // Vérifier si un adversaire a rejoint la partie
-            if (currentGame && data.game._id === currentGame._id && !currentGame.opponent && data.game.opponent) {
-                console.log('Un adversaire a rejoint la partie');
-                setNotification({
-                    message: `${data.game.opponent.firstName} a rejoint la partie! La partie va démarrer...`,
-                    type: 'success'
-                });
-                // Si la partie a maintenant deux joueurs, la démarrer automatiquement
-                if (data.game.opponent && data.game.status === 'playing') {
-                    console.log('Démarrage automatique après jointure d\'un adversaire');
-                    setGameStarted(true);
-                    setIsMyTurn(data.game.creator._id === userId);
-                    setTimeRemaining(data.game.timeLimit);
-                    setNotification({
-                        message: `Partie démarrée! ${data.game.creator._id === userId ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
-                        type: 'success'
-                    });
-                    setGames(prev => prev.filter(game => game._id !== data.game._id));
-                    return;
-                }
-            }
-
-            // Vérifier si la partie doit démarrer (deux joueurs présents)
-            if (data.game.status === 'playing' && data.game.opponent) {
-                console.log('Démarrage automatique de la partie (sans condition sur gameStarted)');
+            // Forcer la bascule sur l'interface de jeu dès que la partie est en 'playing' et qu'il y a deux joueurs
+            if (updatedGame.status === 'playing' && updatedGame.opponent) {
                 setGameStarted(true);
-                setIsMyTurn(data.game.creator._id === userId);
-                setTimeRemaining(data.game.timeLimit);
+                setIsMyTurn(updatedGame.creator._id === userId);
+                setTimeRemaining(updatedGame.timeLimit);
                 setNotification({
-                    message: `Partie démarrée! ${data.game.creator._id === userId ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
+                    message: `Partie démarrée! ${updatedGame.creator._id === userId ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
                     type: 'success'
                 });
-                setGames(prev => prev.filter(game => game._id !== data.game._id));
+                setGames(prev => prev.filter(game => game._id !== updatedGame._id));
+                setTimeout(() => {
+                    console.log('[DEBUG] Bascule interface de jeu: currentGame =', updatedGame, 'gameStarted =', true, 'isMyTurn =', updatedGame.creator._id === userId);
+                }, 0);
                 return;
             }
 
