@@ -44,6 +44,9 @@ export default function MultiplayerGame() {
     const [countdownValue, setCountdownValue] = useState(3); // Valeur du compte à rebours
     const [showGameOverModal, setShowGameOverModal] = useState(false); // Modal de fin de partie
     const [gameResult, setGameResult] = useState<any>(null); // Résultat de la partie
+    const [showGenerationAnimation, setShowGenerationAnimation] = useState(false); // Animation de génération
+    const [generatingPlayer, setGeneratingPlayer] = useState<string | null>(null); // Qui génère actuellement
+    const [generatingNumber, setGeneratingNumber] = useState<number | null>(null); // Nombre en cours de génération
     const userId = localStorage.getItem('userId');
 
     // Initialisation Socket.IO et chargement des données
@@ -179,6 +182,8 @@ export default function MultiplayerGame() {
                 setGameStarted(false);
                 setIsMyTurn(false);
                 setTimeRemaining(null);
+                setShowGenerationAnimation(false);
+                setGeneratingPlayer(null);
 
                 const isWinner = data.game.winner === userId;
                 const winnerName = isWinner ? 'Vous' :
@@ -205,14 +210,23 @@ export default function MultiplayerGame() {
                 loadUserBalance();
             } else {
                 if (data.timeout) {
+                    setGameStarted(false);
+                    setIsMyTurn(false);
+                    setTimeRemaining(null);
+                    setShowGenerationAnimation(false);
+                    setGeneratingPlayer(null);
+                    
                     setNotification({
                         message: 'Temps écoulé! Le joueur a perdu automatiquement.',
                         type: 'error'
                     });
+                    
+                    // Recharger le solde utilisateur après timeout
+                    loadUserBalance();
                 }
             }
             
-            // Notification du nombre généré en temps réel avec délai
+            // Notification du nombre généré en temps réel (sans animation)
             if (data.lastPlayedNumber !== undefined && data.lastPlayer) {
                 const isMe = String(data.lastPlayer) === String(userId);
                 setTimeout(() => {
@@ -431,35 +445,29 @@ export default function MultiplayerGame() {
 
     const handlePlayTurn = async () => {
         if (!currentGame || !isMyTurn) return;
-        setIsGenerating(true);
-
-        // Animation de génération de nombre (comme en mode solo)
-        const animationDuration = 3000; // 3 secondes
-        const startTime = Date.now();
-
-        const animateNumber = () => {
-            const elapsed = Date.now() - startTime;
-            const progress = Math.min(elapsed / animationDuration, 1);
-
-            if (progress < 1) {
-                // Générer un nombre aléatoire pour l'animation
-                const randomNum = Math.floor(Math.random() * 100);
-                setNotification({
-                    message: `Génération en cours... ${randomNum}`,
-                    type: 'info'
-                });
-                requestAnimationFrame(animateNumber);
-            }
-        };
-
-        animateNumber();
-
-        // Attendre la fin de l'animation
-        await new Promise(resolve => setTimeout(resolve, animationDuration));
-
+        
+        // Démarrer l'animation de génération pour tous les joueurs
+        setShowGenerationAnimation(true);
+        setGeneratingPlayer(userId);
+        setGeneratingNumber(null);
+        
+        // Animation de nombres aléatoires pendant 3 secondes
+        const animationInterval = setInterval(() => {
+            setGeneratingNumber(Math.floor(Math.random() * 101));
+        }, 100);
+        
+        // Délai de 3 secondes pour l'animation
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        clearInterval(animationInterval);
+        
+        // Appel API pour générer le vrai nombre
         const { success, error } = await apiService.game.playMultiplayerTurn(currentGame._id);
-        setIsGenerating(false);
-
+        
+        // Arrêter l'animation
+        setShowGenerationAnimation(false);
+        setGeneratingPlayer(null);
+        setGeneratingNumber(null);
+        
         if (success) {
             playTurn(currentGame._id);
             setIsMyTurn(false);
@@ -775,6 +783,23 @@ export default function MultiplayerGame() {
                         </p>
                     </div>
                 </div>
+
+                {/* Animation de génération */}
+                {showGenerationAnimation && generatingPlayer && (
+                    <div className="bg-white border-2 border-indigo-300 p-6 rounded-2xl shadow-lg flex flex-col items-center mb-6 animate-pulse">
+                        <h3 className="font-semibold text-lg mb-4 text-indigo-700">
+                            {String(generatingPlayer) === String(userId) ? 'Vous générez...' : 'L\'adversaire génère...'}
+                        </h3>
+                        <div className="text-6xl font-bold text-indigo-600 mb-4 animate-bounce">
+                            {generatingNumber !== null ? generatingNumber : '?'}
+                        </div>
+                        <div className="flex justify-center items-center space-x-2">
+                            <div className="w-3 h-3 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                            <div className="w-3 h-3 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                            <div className="w-3 h-3 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                        </div>
+                    </div>
+                )}
 
                 {isMyTurn && timeRemaining !== null && (
                     <>
