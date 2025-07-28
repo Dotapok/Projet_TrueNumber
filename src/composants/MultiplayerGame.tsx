@@ -521,7 +521,7 @@ export default function MultiplayerGame() {
                 <div className="grid grid-cols-2 gap-6 mb-8">
                     <div className="bg-white border border-blue-300 p-6 rounded-2xl shadow flex flex-col items-center">
                         <h3 className="font-semibold text-lg mb-2 text-indigo-700 flex items-center gap-2">
-                            👤 {currentGame.creator?._id === userId ? 'Vous' : (currentGame.creator?.firstName || 'Joueur')}
+                            👤 {currentGame.creator?._id === userId ? 'Vous' : (currentGame.creator?.firstName || 'Joueur 1')}
                         </h3>
                         <p className="text-gray-600 italic">Prêt</p>
                     </div>
@@ -529,7 +529,7 @@ export default function MultiplayerGame() {
                     <div className="bg-white border border-gray-100 p-6 rounded-2xl shadow flex flex-col items-center">
                         <h3 className="font-semibold text-lg mb-2 text-purple-700 flex items-center gap-2">
                             👥 {currentGame.opponent
-                                ? (currentGame.opponent._id === userId ? 'Vous' : currentGame.opponent.firstName)
+                                ? (currentGame.opponent._id === userId ? 'Vous' : (currentGame.opponent.firstName || 'Joueur 2'))
                                 : <span className="italic text-gray-400">Adversaire</span>}
                         </h3>
                         <p className="text-gray-600 italic">
@@ -592,7 +592,7 @@ export default function MultiplayerGame() {
                 <div className="grid grid-cols-2 gap-6 mb-8">
                     <div className={`bg-white border ${currentGame.creator?._id === userId ? 'border-blue-300' : 'border-gray-100'} p-6 rounded-2xl shadow flex flex-col items-center`}>
                         <h3 className="font-semibold text-lg mb-2 text-indigo-700 flex items-center gap-2">
-                            👤 {currentGame.creator?._id === userId ? 'Vous' : (currentGame.creator?.firstName || 'Joueur')}
+                            👤 {currentGame.creator?._id === userId ? 'Vous' : (currentGame.creator?.firstName || 'Joueur 1')}
                         </h3>
                         <p className="text-gray-600 font-mono text-xl">
                             {currentGame.creatorNumber !== undefined ?
@@ -605,7 +605,7 @@ export default function MultiplayerGame() {
                     <div className={`bg-white border ${currentGame.opponent?._id === userId ? 'border-blue-300' : 'border-gray-100'} p-6 rounded-2xl shadow flex flex-col items-center`}>
                         <h3 className="font-semibold text-lg mb-2 text-purple-700 flex items-center gap-2">
                             👥 {currentGame.opponent
-                                ? (currentGame.opponent._id === userId ? 'Vous' : currentGame.opponent.firstName)
+                                ? (currentGame.opponent._id === userId ? 'Vous' : (currentGame.opponent.firstName || 'Joueur 2'))
                                 : <span className="italic text-gray-400">En attente...</span>}
                         </h3>
                         <p className="text-gray-600 font-mono text-xl">
