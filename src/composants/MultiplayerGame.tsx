@@ -26,6 +26,7 @@ export default function MultiplayerGame() {
     const [isMyTurn, setIsMyTurn] = useState(false);
     const [gameStarted, setGameStarted] = useState(false);
     const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+    const [lastCheckTime, setLastCheckTime] = useState(0);
     const [notification, setNotification] = useState<{
         message: string;
         type: 'success' | 'error' | 'info';
@@ -159,17 +160,9 @@ export default function MultiplayerGame() {
 
     // Polling pour vérifier l'état de la partie quand on est en attente
     useEffect(() => {
-        if (currentGame && !gameStarted) {
-            console.log('Démarrage du polling pour la partie:', currentGame._id);
-            const interval = setInterval(() => {
-                console.log('Polling - vérification du statut...');
-                checkAndStartGame();
-            }, 1000); // Vérifier toutes les secondes
-
-            return () => {
-                console.log('Arrêt du polling');
-                clearInterval(interval);
-            };
+        if (currentGame && !gameStarted && currentGame.opponent) {
+            const interval = setInterval(checkAndStartGame, 10000); // 10 secondes
+            return () => clearInterval(interval);
         }
     }, [currentGame, gameStarted]);
 
@@ -403,50 +396,21 @@ export default function MultiplayerGame() {
 
     // Fonction pour vérifier et forcer le démarrage de la partie
     const checkAndStartGame = async () => {
-        if (!currentGame || gameStarted) return;
-
-        console.log('Vérification du statut de la partie:', currentGame._id);
-        console.log('État actuel - gameStarted:', gameStarted, 'currentGame:', currentGame);
+        const now = Date.now();
+        if (now - lastCheckTime < 5000) return; // 5 secondes entre les checks
+        setLastCheckTime(now);
 
         try {
             const { success, data } = await apiService.game.getGameStatus(currentGame._id);
-            console.log('Réponse API getGameStatus:', { success, data });
-            
-            if (success && data) {
-                // Gérer les différentes structures de réponse possibles
-                let gameData;
-                if (data.game) {
-                    gameData = data.game;
-                } else if (Array.isArray(data)) {
-                    gameData = data[0];
-                } else {
-                    gameData = data;
-                }
-                
-                console.log('Données de jeu traitées:', gameData);
-                console.log('Opponent:', gameData.opponent, 'Status:', gameData.status);
-                
-                // Si la partie a deux joueurs et est en statut "playing", la démarrer
-                if (gameData.opponent && gameData.status === 'playing') {
-                    console.log('Démarrage forcé de la partie');
-                    setGameStarted(true);
-                    setIsMyTurn(gameData.creator._id === userId);
-                    setTimeRemaining(gameData.timeLimit);
-                    setCurrentGame(gameData);
-                    
-                    setNotification({
-                        message: `Partie démarrée! ${gameData.creator._id === userId ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
-                        type: 'success'
-                    });
-                    
-                    // Retirer la partie de la liste des parties en attente
-                    setGames(prev => prev.filter(game => game._id !== gameData._id));
-                } else {
-                    console.log('Conditions non remplies pour démarrer la partie');
-                }
+            if (success && data?.game?.status === 'playing') {
+                setGameStarted(true);
+                setIsMyTurn(data.isMyTurn);
+                setTimeRemaining(data.game.timeLimit);
             }
         } catch (error) {
-            console.error('Erreur lors de la vérification du statut:', error);
+            console.error('Check game status error:', error);
+            // En cas d'erreur, attendre 10s avant de réessayer
+            await new Promise(resolve => setTimeout(resolve, 10000));
         }
     };
 
