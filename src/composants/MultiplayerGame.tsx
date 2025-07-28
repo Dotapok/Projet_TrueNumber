@@ -44,11 +44,6 @@ export default function MultiplayerGame() {
     const [countdownValue, setCountdownValue] = useState(3); // Valeur du compte à rebours
     const [showGameOverModal, setShowGameOverModal] = useState(false); // Modal de fin de partie
     const [gameResult, setGameResult] = useState<any>(null); // Résultat de la partie
-    const [showGenerationAnimation, setShowGenerationAnimation] = useState(false); // Animation de génération
-    const [generatingNumber, setGeneratingNumber] = useState<number | null>(null); // Nombre en cours de génération
-    const [generatingPlayer, setGeneratingPlayer] = useState<string | null>(null); // Qui génère
-    const [showEndCountdown, setShowEndCountdown] = useState(false); // Décompte de fin
-    const [endCountdownValue, setEndCountdownValue] = useState(3); // Valeur du décompte de fin
     const userId = localStorage.getItem('userId');
 
     // Initialisation Socket.IO et chargement des données
@@ -94,7 +89,7 @@ export default function MultiplayerGame() {
             setIsMyTurn(isMyTurn);
             setTimeRemaining(data.timeLimit);
             setGames(prev => prev.filter(game => game._id !== data.game._id));
-            
+
             // Afficher la bannière de compte à rebours
             setShowCountdownBanner(true);
             setCountdownValue(3);
@@ -106,10 +101,10 @@ export default function MultiplayerGame() {
                         clearInterval(countdownInterval);
                         setShowCountdownBanner(false);
                         setGameStarted(true);
-                        setNotification({
+            setNotification({
                             message: `Partie démarrée! ${isMyTurn ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
-                            type: 'success'
-                        });
+                type: 'success'
+            });
                         return 0;
                     }
                     return prev - 1;
@@ -189,30 +184,17 @@ export default function MultiplayerGame() {
                 const winnerName = isWinner ? 'Vous' :
                     (data.game.winner === data.game.creator._id ? data.game.creator.firstName : data.game.opponent?.firstName);
 
-                // Décompte de 3 secondes avant d'afficher le modal de fin
-                setShowEndCountdown(true);
-                setEndCountdownValue(3);
-                
-                const endCountdownInterval = setInterval(() => {
-                    setEndCountdownValue(prev => {
-                        if (prev <= 1) {
-                            clearInterval(endCountdownInterval);
-                            setShowEndCountdown(false);
-                            
-                            // Afficher le modal de fin de partie
-                            setGameResult({
-                                winner: winnerName,
-                                stake: data.game.stake,
-                                creatorNumber: data.game.creatorNumber,
-                                opponentNumber: data.game.opponentNumber,
-                                isWinner
-                            });
-                            setShowGameOverModal(true);
-                            return 0;
-                        }
-                        return prev - 1;
+                // Afficher le modal de fin de partie après 3 secondes
+                setTimeout(() => {
+                    setGameResult({
+                        winner: winnerName,
+                        stake: data.game.stake,
+                        creatorNumber: data.game.creatorNumber,
+                        opponentNumber: data.game.opponentNumber,
+                        isWinner
                     });
-                }, 1000);
+                    setShowGameOverModal(true);
+                }, 3000);
 
                 setNotification({
                     message: `${winnerName} gagne la partie et reçoit ${data.game.stake} points !`,
@@ -233,25 +215,6 @@ export default function MultiplayerGame() {
             // Notification du nombre généré en temps réel avec délai
             if (data.lastPlayedNumber !== undefined && data.lastPlayer) {
                 const isMe = String(data.lastPlayer) === String(userId);
-                
-                // Afficher l'animation de génération chez l'autre joueur
-                if (!isMe) {
-                    setShowGenerationAnimation(true);
-                    setGeneratingPlayer(data.lastPlayer);
-                    
-                    // Animation de nombres aléatoires pendant 3 secondes
-                    const animationInterval = setInterval(() => {
-                        setGeneratingNumber(Math.floor(Math.random() * 101));
-                    }, 100);
-                    
-                    setTimeout(() => {
-                        clearInterval(animationInterval);
-                        setShowGenerationAnimation(false);
-                        setGeneratingNumber(null);
-                        setGeneratingPlayer(null);
-                    }, 3000);
-                }
-                
                 setTimeout(() => {
                     setNotification({
                         message: isMe
@@ -259,7 +222,7 @@ export default function MultiplayerGame() {
                             : `L'adversaire a généré le nombre ${data.lastPlayedNumber}`,
                         type: isMe ? 'success' : 'info'
                     });
-                }, 3500); // Délai après l'animation
+                }, 1000); // Délai de 1s pour la notification
             }
         });
 
@@ -469,26 +432,34 @@ export default function MultiplayerGame() {
     const handlePlayTurn = async () => {
         if (!currentGame || !isMyTurn) return;
         setIsGenerating(true);
-        
-        // Démarrer l'animation de génération
-        setShowGenerationAnimation(true);
-        setGeneratingPlayer(userId);
-        
-        // Animation de nombres aléatoires pendant 3 secondes
-        const animationInterval = setInterval(() => {
-            setGeneratingNumber(Math.floor(Math.random() * 101));
-        }, 100);
-        
-        // Délai de 3 secondes pour l'animation
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        clearInterval(animationInterval);
-        setShowGenerationAnimation(false);
-        setGeneratingNumber(null);
-        setGeneratingPlayer(null);
-        
+
+        // Animation de génération de nombre (comme en mode solo)
+        const animationDuration = 3000; // 3 secondes
+        const startTime = Date.now();
+
+        const animateNumber = () => {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / animationDuration, 1);
+
+            if (progress < 1) {
+                // Générer un nombre aléatoire pour l'animation
+                const randomNum = Math.floor(Math.random() * 100);
+                setNotification({
+                    message: `Génération en cours... ${randomNum}`,
+                    type: 'info'
+                });
+                requestAnimationFrame(animateNumber);
+            }
+        };
+
+        animateNumber();
+
+        // Attendre la fin de l'animation
+        await new Promise(resolve => setTimeout(resolve, animationDuration));
+
         const { success, error } = await apiService.game.playMultiplayerTurn(currentGame._id);
         setIsGenerating(false);
+
         if (success) {
             playTurn(currentGame._id);
             setIsMyTurn(false);
@@ -709,23 +680,6 @@ export default function MultiplayerGame() {
         );
     }
 
-    // Décompte de fin de partie
-    if (showEndCountdown) {
-        return (
-            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-8 mt-6 transition-all duration-300 hover:shadow-2xl">
-                <div className="text-center mb-8">
-                    <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
-                        Fin de partie !
-                    </h2>
-                    <div className="text-6xl font-bold text-indigo-600 mb-4 animate-pulse">
-                        {endCountdownValue}
-                    </div>
-                    <p className="text-gray-600">Affichage du résultat...</p>
-                </div>
-            </div>
-        );
-    }
-
     // Modal de fin de partie
     if (showGameOverModal && gameResult) {
         return (
@@ -752,12 +706,12 @@ export default function MultiplayerGame() {
                     </div>
 
                     <div className="flex gap-4">
-                        <button
+                    <button
                             onClick={closeGameOverModal}
                             className="flex-1 px-4 py-3 rounded-xl font-bold transition-all duration-300 bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700"
                         >
                             Retour à l'accueil
-                        </button>
+                    </button>
                     </div>
                 </div>
             </div>
@@ -821,25 +775,6 @@ export default function MultiplayerGame() {
                         </p>
                     </div>
                 </div>
-
-                {/* Animation de génération de nombre */}
-                {showGenerationAnimation && (
-                    <div className="bg-white border-2 border-dashed border-indigo-300 p-6 rounded-2xl shadow-lg mt-6">
-                        <div className="text-center">
-                            <h3 className="font-semibold text-lg mb-4 text-indigo-700">
-                                {generatingPlayer === userId ? 'Vous générez...' : 'L\'adversaire génère...'}
-                            </h3>
-                            <div className="text-6xl font-bold text-indigo-600 mb-4 animate-pulse">
-                                {generatingNumber !== null ? generatingNumber : '?'}
-                            </div>
-                            <div className="flex justify-center items-center space-x-2">
-                                <div className="w-3 h-3 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                                <div className="w-3 h-3 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                                <div className="w-3 h-3 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 {isMyTurn && timeRemaining !== null && (
                     <>
