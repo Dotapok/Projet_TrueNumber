@@ -173,6 +173,7 @@ export default function MultiplayerGame() {
         if (success && data) {
             // Rejoindre la room et attendre l'événement gameStarted
             joinGameRoom(gameId);
+            setCurrentGame(data.data);
             setNotification({
                 message: 'Partie rejointe! La partie va démarrer...',
                 type: 'success'
@@ -234,14 +235,18 @@ export default function MultiplayerGame() {
     };
 
     // Interface d'attente (quand on a créé une partie mais qu'elle n'a pas encore commencé)
-    if (currentGame && !gameStarted && currentGame.creator._id === userId) {
+    if (currentGame && !gameStarted) {
         return (
             <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-8 mt-6 transition-all duration-300 hover:shadow-2xl">
                 <div className="text-center mb-8">
                     <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
-                        Partie créée - Mise: {currentGame.stake} points
+                        {currentGame.creator._id === userId ? 'Partie créée' : 'Partie rejointe'} - Mise: {currentGame.stake} points
                     </h2>
-                    <p className="text-gray-600">En attente d'un adversaire...</p>
+                    <p className="text-gray-600">
+                        {currentGame.creator._id === userId
+                            ? 'En attente d\'un adversaire...'
+                            : 'La partie va bientôt commencer...'}
+                    </p>
                 </div>
 
                 {notification && (
@@ -255,16 +260,22 @@ export default function MultiplayerGame() {
                 <div className="grid grid-cols-2 gap-6 mb-8">
                     <div className="bg-white border border-blue-300 p-6 rounded-2xl shadow flex flex-col items-center">
                         <h3 className="font-semibold text-lg mb-2 text-indigo-700 flex items-center gap-2">
-                            👤 Vous (Créateur)
+                            👤 {currentGame.creator.firstName}
+                            {currentGame.creator._id === userId && ' (Vous)'}
                         </h3>
-                        <p className="text-gray-600 italic">En attente de l'adversaire...</p>
+                        <p className="text-gray-600 italic">Prêt</p>
                     </div>
 
                     <div className="bg-white border border-gray-100 p-6 rounded-2xl shadow flex flex-col items-center">
                         <h3 className="font-semibold text-lg mb-2 text-purple-700 flex items-center gap-2">
-                            <span className="italic text-gray-400">Adversaire</span>
+                            {currentGame.opponent?.firstName
+                                ? `👥 ${currentGame.opponent.firstName}`
+                                : <span className="italic text-gray-400">Adversaire</span>}
+                            {currentGame.opponent?._id === userId && ' (Vous)'}
                         </h3>
-                        <p className="text-gray-600 italic">En attente...</p>
+                        <p className="text-gray-600 italic">
+                            {currentGame.opponent ? 'Prêt' : 'En attente...'}
+                        </p>
                     </div>
                 </div>
 
@@ -273,7 +284,7 @@ export default function MultiplayerGame() {
                         onClick={leaveGame}
                         className="px-6 py-2 rounded-xl font-bold transition-all duration-300 bg-gray-200 text-gray-700 hover:bg-gray-300"
                     >
-                        Annuler la partie
+                        {currentGame.creator._id === userId ? 'Annuler la partie' : 'Quitter'}
                     </button>
                 </div>
             </div>
