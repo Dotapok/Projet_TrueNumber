@@ -138,6 +138,11 @@ export const apiService = {
         
         localStorage.setItem('authToken', loginData.token);
         localStorage.setItem('user', JSON.stringify(loginData.user));
+
+        if (loginData && loginData.user && loginData.user._id) {
+          localStorage.setItem('userId', loginData.user._id);
+          console.log('[DEBUG] userId stocké dans localStorage =', loginData.user._id);
+        }
       }
 
       return response;
