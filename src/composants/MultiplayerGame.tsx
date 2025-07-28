@@ -68,6 +68,32 @@ export default function MultiplayerGame() {
             console.log('Mise à jour du jeu:', data);
             setCurrentGame(data.game);
 
+            // Vérifier si un adversaire a rejoint la partie
+            if (currentGame && data.game._id === currentGame._id && !currentGame.opponent && data.game.opponent) {
+                console.log('Un adversaire a rejoint la partie');
+                setNotification({
+                    message: `${data.game.opponent.firstName} a rejoint la partie! La partie va démarrer...`,
+                    type: 'success'
+                });
+            }
+
+            // Vérifier si la partie doit démarrer (deux joueurs présents)
+            if (data.game.status === 'playing' && !gameStarted) {
+                console.log('Démarrage automatique de la partie');
+                setGameStarted(true);
+                setIsMyTurn(data.game.creator._id === userId);
+                setTimeRemaining(data.game.timeLimit);
+                
+                setNotification({
+                    message: `Partie démarrée! ${data.game.creator._id === userId ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
+                    type: 'success'
+                });
+                
+                // Retirer la partie de la liste des parties en attente
+                setGames(prev => prev.filter(game => game._id !== data.game._id));
+                return;
+            }
+
             if (data.finished) {
                 setGameStarted(false);
                 setIsMyTurn(false);
@@ -108,17 +134,28 @@ export default function MultiplayerGame() {
         };
     }, [userId]);
 
+    // Polling pour vérifier l'état de la partie quand on est en attente
+    useEffect(() => {
+        if (currentGame && !gameStarted) {
+            const interval = setInterval(() => {
+                checkAndStartGame();
+            }, 2000); // Vérifier toutes les 2 secondes
+
+            return () => clearInterval(interval);
+        }
+    }, [currentGame, gameStarted]);
+
     const loadWaitingGames = async () => {
         const { success, data } = await apiService.game.listWaitingGames();
         if (success && data) {
-            setGames(data.data || []);
+            setGames(Array.isArray(data) ? data : data.data || []);
         }
     };
 
     const loadUserBalance = async () => {
         const { success, data } = await apiService.user.getPointsBalance();
         if (success && data) {
-            setUserBalance(data.data.points);
+            setUserBalance(Array.isArray(data) ? data[0]?.points || 0 : data.points || 0);
         }
     };
 
@@ -137,16 +174,38 @@ export default function MultiplayerGame() {
         );
 
         if (success && data) {
+            const gameData = Array.isArray(data) ? data[0] : data;
             // Mettre à jour la liste des parties
-            setGames(prev => [...prev, data.data]);
+            setGames(prev => [...prev, gameData]);
             // Définir la partie courante et rejoindre la room
-            setCurrentGame(data.data);
-            joinGameRoom(data.data._id);
+            setCurrentGame(gameData);
+            joinGameRoom(gameData._id);
             setShowCreateModal(false);
             setNotification({
                 message: 'Partie créée! En attente d\'un adversaire...',
                 type: 'success'
             });
+            
+            // Vérifier périodiquement si un joueur a rejoint
+            const checkInterval = setInterval(() => {
+                if (gameData.opponent && gameData.status === 'playing') {
+                    clearInterval(checkInterval);
+                    console.log('Joueur rejoint, démarrage automatique');
+                    setGameStarted(true);
+                    setIsMyTurn(true); // Le créateur commence toujours
+                    setTimeRemaining(gameData.timeLimit);
+                    
+                    setNotification({
+                        message: 'Partie démarrée! C\'est votre tour!',
+                        type: 'success'
+                    });
+                }
+            }, 2000);
+            
+            // Arrêter la vérification après 30 secondes
+            setTimeout(() => {
+                clearInterval(checkInterval);
+            }, 30000);
         } else {
             setNotification({
                 message: error || 'Erreur lors de la création',
@@ -171,13 +230,36 @@ export default function MultiplayerGame() {
         const { success, data, error } = await apiService.game.joinMultiplayerGame(gameId);
 
         if (success && data) {
+            const gameData = Array.isArray(data) ? data[0] : data;
             // Rejoindre la room et attendre l'événement gameStarted
             joinGameRoom(gameId);
-            setCurrentGame(data.data);
-            setNotification({
-                message: 'Partie rejointe! La partie va démarrer...',
-                type: 'success'
-            });
+            setCurrentGame(gameData);
+            
+            // Vérifier si la partie a maintenant deux joueurs et peut démarrer
+            if (gameData.opponent && gameData.status === 'playing') {
+                console.log('Démarrage automatique après jointure');
+                setGameStarted(true);
+                setIsMyTurn(gameData.creator._id === userId);
+                setTimeRemaining(gameData.timeLimit);
+                
+                setNotification({
+                    message: `Partie démarrée! ${gameData.creator._id === userId ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
+                    type: 'success'
+                });
+                
+                // Retirer la partie de la liste des parties en attente
+                setGames(prev => prev.filter(game => game._id !== gameData._id));
+            } else {
+                setNotification({
+                    message: 'Partie rejointe! La partie va démarrer...',
+                    type: 'success'
+                });
+                
+                // Forcer la vérification du statut après un délai
+                setTimeout(() => {
+                    checkAndStartGame();
+                }, 1000);
+            }
         } else {
             setNotification({
                 message: error || 'Erreur lors de la jointure',
@@ -234,6 +316,37 @@ export default function MultiplayerGame() {
         loadWaitingGames();
     };
 
+    // Fonction pour vérifier et forcer le démarrage de la partie
+    const checkAndStartGame = async () => {
+        if (!currentGame || gameStarted) return;
+
+        try {
+            const { success, data } = await apiService.game.getGameStatus(currentGame._id);
+            if (success && data) {
+                const gameData = data.game;
+                
+                // Si la partie a deux joueurs et est en statut "playing", la démarrer
+                if (gameData.opponent && gameData.status === 'playing') {
+                    console.log('Démarrage forcé de la partie');
+                    setGameStarted(true);
+                    setIsMyTurn(gameData.creator._id === userId);
+                    setTimeRemaining(gameData.timeLimit);
+                    setCurrentGame(gameData);
+                    
+                    setNotification({
+                        message: `Partie démarrée! ${gameData.creator._id === userId ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
+                        type: 'success'
+                    });
+                    
+                    // Retirer la partie de la liste des parties en attente
+                    setGames(prev => prev.filter(game => game._id !== gameData._id));
+                }
+            }
+        } catch (error) {
+            console.error('Erreur lors de la vérification du statut:', error);
+        }
+    };
+
     // Interface d'attente (quand on a créé une partie mais qu'elle n'a pas encore commencé)
     if (currentGame && !gameStarted) {
         return (
@@ -279,13 +392,22 @@ export default function MultiplayerGame() {
                     </div>
                 </div>
 
-                <div className="flex justify-center mt-6">
+                <div className="flex justify-center gap-4 mt-6">
                     <button
                         onClick={leaveGame}
                         className="px-6 py-2 rounded-xl font-bold transition-all duration-300 bg-gray-200 text-gray-700 hover:bg-gray-300"
                     >
                         {currentGame.creator._id === userId ? 'Annuler la partie' : 'Quitter'}
                     </button>
+                    
+                    {currentGame.opponent && (
+                        <button
+                            onClick={checkAndStartGame}
+                            className="px-6 py-2 rounded-xl font-bold transition-all duration-300 bg-green-500 text-white hover:bg-green-600"
+                        >
+                            Démarrer la partie
+                        </button>
+                    )}
                 </div>
             </div>
         );
