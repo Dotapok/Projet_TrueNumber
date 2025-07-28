@@ -397,22 +397,97 @@ export default function MultiplayerGame() {
     // Fonction pour vérifier et forcer le démarrage de la partie
     const checkAndStartGame = async () => {
         const now = Date.now();
-        if (now - lastCheckTime < 5000) return; // 5 secondes entre les checks
+        if (now - lastCheckTime < 10000) return; 
         setLastCheckTime(now);
 
         try {
-            const { success, data } = await apiService.game.getGameStatus(currentGame._id);
-            if (success && data?.game?.status === 'playing') {
-                setGameStarted(true);
-                setIsMyTurn(data.isMyTurn);
-                setTimeRemaining(data.game.timeLimit);
+            // Étape 1: Récupération des données brutes
+            const { success, data: rawData } = await apiService.game.getGameStatus(currentGame._id);
+
+            // Étape 2: Normalisation des données
+            const responseData = normalizeApiResponse(rawData);
+            console.log('Données normalisées:', responseData);
+
+            // Étape 3: Vérification et mise à jour de l'état
+            if (success && responseData?.success) {
+                const gameData = responseData.data?.game || responseData.data;
+
+                if (gameData?.status === 'playing' && gameData.opponent) {
+                    console.log('Démarrage de la partie - conditions remplies');
+
+                    // Parse currentPlayer si nécessaire
+                    const currentPlayer = typeof gameData.currentPlayer === 'string'
+                        ? tryParseJson(gameData.currentPlayer)
+                        : gameData.currentPlayer;
+
+                    setGameStarted(true);
+                    setIsMyTurn(
+                        responseData.data?.isMyTurn ??
+                        (currentPlayer?._id === userId || gameData.creator._id === userId)
+                    );
+                    setTimeRemaining(gameData.timeLimit);
+
+                    // Mise à jour complète du jeu
+                    setCurrentGame(prev => ({
+                        ...prev,
+                        ...gameData,
+                        creator: tryParseJson(gameData.creator),
+                        opponent: tryParseJson(gameData.opponent)
+                    }));
+
+                    setNotification({
+                        message: `Partie démarrée! ${gameData.creator._id === userId ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
+                        type: 'success'
+                    });
+                } else {
+                    console.log('Conditions non remplies:', {
+                        status: gameData?.status,
+                        hasOpponent: !!gameData?.opponent
+                    });
+                }
             }
         } catch (error) {
-            console.error('Check game status error:', error);
+            console.error('Erreur lors de la vérification du statut:', error);
             // En cas d'erreur, attendre 10s avant de réessayer
             await new Promise(resolve => setTimeout(resolve, 10000));
         }
     };
+
+    // Fonctions utilitaires à ajouter dans le même fichier
+    function normalizeApiResponse(response: any) {
+        if (!response) return response;
+
+        // Si la réponse contient data.data, utilisez cette structure
+        if (response?.data?.data) {
+            return {
+                ...response,
+                data: {
+                    ...response.data.data,
+                    currentPlayer: tryParseJson(response.data.data.currentPlayer),
+                    game: response.data.data.game ? {
+                        ...response.data.data.game,
+                        creator: tryParseJson(response.data.data.game.creator),
+                        opponent: tryParseJson(response.data.data.game.opponent)
+                    } : undefined
+                }
+            };
+        }
+        return response;
+    }
+
+    function tryParseJson(jsonString: any) {
+        if (typeof jsonString !== 'string') return jsonString;
+        try {
+            // Gère les ObjectId MongoDB dans les strings JSON
+            const normalizedString = jsonString.replace(/ObjectId\('[^']+'\)/g, (match: string) => {
+                return `"${match.split("'")[1]}"`;
+            });
+            return JSON.parse(normalizedString);
+        } catch (e) {
+            console.warn('Échec du parsing JSON:', e);
+            return jsonString;
+        }
+    }
 
     // Interface d'attente (quand on a créé une partie mais qu'elle n'a pas encore commencé)
     if (currentGame && !gameStarted && currentGame.creator) {
