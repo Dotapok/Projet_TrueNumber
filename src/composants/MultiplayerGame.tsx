@@ -93,38 +93,31 @@ export default function MultiplayerGame() {
                     message: `${data.game.opponent.firstName} a rejoint la partie! La partie va démarrer...`,
                     type: 'success'
                 });
-                
                 // Si la partie a maintenant deux joueurs, la démarrer automatiquement
                 if (data.game.opponent && data.game.status === 'playing') {
                     console.log('Démarrage automatique après jointure d\'un adversaire');
                     setGameStarted(true);
                     setIsMyTurn(data.game.creator._id === userId);
                     setTimeRemaining(data.game.timeLimit);
-                    
                     setNotification({
                         message: `Partie démarrée! ${data.game.creator._id === userId ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
                         type: 'success'
                     });
-                    
-                    // Retirer la partie de la liste des parties en attente
                     setGames(prev => prev.filter(game => game._id !== data.game._id));
                     return;
                 }
             }
 
             // Vérifier si la partie doit démarrer (deux joueurs présents)
-            if (data.game.status === 'playing' && !gameStarted && data.game.opponent) {
-                console.log('Démarrage automatique de la partie');
+            if (data.game.status === 'playing' && data.game.opponent) {
+                console.log('Démarrage automatique de la partie (sans condition sur gameStarted)');
                 setGameStarted(true);
                 setIsMyTurn(data.game.creator._id === userId);
                 setTimeRemaining(data.game.timeLimit);
-                
                 setNotification({
                     message: `Partie démarrée! ${data.game.creator._id === userId ? 'C\'est votre tour!' : 'En attente de l\'autre joueur...'}`,
                     type: 'success'
                 });
-                
-                // Retirer la partie de la liste des parties en attente
                 setGames(prev => prev.filter(game => game._id !== data.game._id));
                 return;
             }
@@ -526,18 +519,16 @@ export default function MultiplayerGame() {
                 <div className="grid grid-cols-2 gap-6 mb-8">
                     <div className="bg-white border border-blue-300 p-6 rounded-2xl shadow flex flex-col items-center">
                         <h3 className="font-semibold text-lg mb-2 text-indigo-700 flex items-center gap-2">
-                            👤 {currentGame.creator?.firstName || 'Joueur'}
-                            {currentGame.creator?._id === userId && ' (Vous)'}
+                            👤 {currentGame.creator?._id === userId ? 'Vous' : (currentGame.creator?.firstName || 'Joueur')}
                         </h3>
                         <p className="text-gray-600 italic">Prêt</p>
                     </div>
 
                     <div className="bg-white border border-gray-100 p-6 rounded-2xl shadow flex flex-col items-center">
                         <h3 className="font-semibold text-lg mb-2 text-purple-700 flex items-center gap-2">
-                            {currentGame.opponent?.firstName
-                                ? `👥 ${currentGame.opponent.firstName}`
+                            👥 {currentGame.opponent
+                                ? (currentGame.opponent._id === userId ? 'Vous' : currentGame.opponent.firstName)
                                 : <span className="italic text-gray-400">Adversaire</span>}
-                            {currentGame.opponent?._id === userId && ' (Vous)'}
                         </h3>
                         <p className="text-gray-600 italic">
                             {currentGame.opponent ? 'Prêt' : 'En attente...'}
@@ -599,8 +590,7 @@ export default function MultiplayerGame() {
                 <div className="grid grid-cols-2 gap-6 mb-8">
                     <div className={`bg-white border ${currentGame.creator?._id === userId ? 'border-blue-300' : 'border-gray-100'} p-6 rounded-2xl shadow flex flex-col items-center`}>
                         <h3 className="font-semibold text-lg mb-2 text-indigo-700 flex items-center gap-2">
-                            👤 {currentGame.creator?.firstName || 'Joueur'}
-                            {currentGame.creator?._id === userId && ' (Vous)'}
+                            👤 {currentGame.creator?._id === userId ? 'Vous' : (currentGame.creator?.firstName || 'Joueur')}
                         </h3>
                         <p className="text-gray-600 font-mono text-xl">
                             {currentGame.creatorNumber !== undefined ?
@@ -612,11 +602,9 @@ export default function MultiplayerGame() {
 
                     <div className={`bg-white border ${currentGame.opponent?._id === userId ? 'border-blue-300' : 'border-gray-100'} p-6 rounded-2xl shadow flex flex-col items-center`}>
                         <h3 className="font-semibold text-lg mb-2 text-purple-700 flex items-center gap-2">
-                            {currentGame.opponent?.firstName ?
-                                `👥 ${currentGame.opponent.firstName}` :
-                                <span className="italic text-gray-400">En attente...</span>
-                            }
-                            {currentGame.opponent?._id === userId && ' (Vous)'}
+                            👥 {currentGame.opponent
+                                ? (currentGame.opponent._id === userId ? 'Vous' : currentGame.opponent.firstName)
+                                : <span className="italic text-gray-400">En attente...</span>}
                         </h3>
                         <p className="text-gray-600 font-mono text-xl">
                             {currentGame.opponentNumber !== undefined ?
