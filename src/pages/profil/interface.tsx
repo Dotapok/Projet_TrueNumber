@@ -39,11 +39,9 @@ export default function Profil() {
     phone: ''
   });
   const [particles, setParticles] = useState<Particle[]>([]);
-  const [isVisible, setIsVisible] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    setIsVisible(true);
     // Génération de particules flottantes
     const particleArray = Array.from({ length: 20 }, (_, i) => ({
       id: i,
@@ -53,9 +51,7 @@ export default function Profil() {
       delay: Math.random() * 2,
     }));
     setParticles(particleArray);
-  }, []);
 
-  useEffect(() => {
     const fetchProfile = async () => {
       const token = localStorage.getItem('authToken');
       if (!token) {
@@ -66,71 +62,40 @@ export default function Profil() {
         navigate('/connexion');
         return;
       }
-      const savedUser = localStorage.getItem('user');
-      if (savedUser) {
-        try {
-          if (typeof savedUser === 'string' && savedUser.trim() !== '') {
-            const user = JSON.parse(savedUser);
-            setProfile({
-              _id: user._id,
-              firstName: user.firstName,
-              lastName: user.lastName,
-              email: user.email,
-              phone: user.phone,
-              role: user.role,
-              points: user.points,
-              createdAt: user.createdAt,
-              bio: user.bio,
-            });
-            setEditData({
-              firstName: user.firstName,
-              lastName: user.lastName,
-              bio: user.bio || '',
-              phone: user.phone || ''
-            });
-          }
-        } catch (e) {
-          console.error('Error parsing saved user', e);
-          setNotification({
-            message: 'Erreur lors du chargement des données utilisateur',
-            type: 'error'
+
+      try {
+        const savedUser = localStorage.getItem('user');
+        if (savedUser) {
+          const user = JSON.parse(savedUser);
+          setProfile(user);
+          setEditData({
+            firstName: user.firstName,
+            lastName: user.lastName,
+            bio: user.bio || '',
+            phone: user.phone || ''
           });
         }
-      }
-      try {
-        const { success, data, error } = await apiService.user.getProfile();
+
+        const { success, data } = await apiService.user.getProfile();
         if (success && data) {
-          setProfile({
-            _id: data.data._id,
-            firstName: data.data.firstName,
-            lastName: data.data.lastName,
-            email: data.data.email,
-            phone: data.data.phone,
-            role: data.data.role,
-            points: data.data.points,
-            createdAt: data.data.createdAt,
-            bio: data.data.bio,
-          });
+          setProfile(data.data);
           setEditData({
             firstName: data.data.firstName,
             lastName: data.data.lastName,
             bio: data.data.bio || '',
             phone: data.data.phone || ''
           });
-        } else {
-          setNotification({
-            message: error || 'Erreur lors du chargement du profil',
-            type: 'error'
-          });
         }
       } catch (err) {
         setNotification({
-          message: 'Erreur réseau lors du chargement du profil',
+          message: 'Erreur lors du chargement du profil',
           type: 'error'
         });
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
+
     fetchProfile();
   }, [navigate]);
 
@@ -156,20 +121,22 @@ export default function Profil() {
   if (!profile) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-violet-900 via-purple-900 to-indigo-900 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center space-y-4">
           <p className="text-red-400">Erreur de chargement du profil</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="ml-4 px-4 py-2 bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white rounded-2xl hover:shadow-2xl hover:shadow-purple-500/50 transition-all duration-300"
-          >
-            Réessayer
-          </button>
-          <button 
-            onClick={handleLogout}
-            className="ml-4 px-4 py-2 bg-gradient-to-r from-yellow-400 to-pink-400 text-white rounded-2xl hover:shadow-2xl hover:shadow-yellow-400/50 transition-all duration-300"
-          >
-            Déconnexion
-          </button>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-gradient-to-r from-pink-500 to-indigo-500 text-white rounded-lg hover:shadow-lg transition-all"
+            >
+              Réessayer
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-gradient-to-r from-yellow-400 to-pink-400 text-white rounded-lg hover:shadow-lg transition-all"
+            >
+              Déconnexion
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -182,7 +149,7 @@ export default function Profil() {
         {particles.map((particle) => (
           <div
             key={particle.id}
-            className="absolute w-2 h-2 bg-white/20 rounded-full animate-bounce"
+            className="absolute rounded-full bg-white/20 animate-bounce"
             style={{
               left: `${particle.x}%`,
               top: `${particle.y}%`,
@@ -194,10 +161,9 @@ export default function Profil() {
           />
         ))}
       </div>
-      {/* Grille SVG en fond */}
-      <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.05%22%3E%3Ccircle%20cx%3D%2230%22%20cy%3D%2230%22%20r%3D%222%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-40"></div>
-      <div className={`relative z-10 p-2 sm:p-4 md:p-8 transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-        {/* SUPPRIMER <NavigationBar /> */}
+
+      {/* Contenu principal */}
+      <div className="container mx-auto px-4 py-8 relative z-10">
         {notification && (
           <Notification
             message={notification.message}
@@ -205,74 +171,73 @@ export default function Profil() {
             onClose={() => setNotification(null)}
           />
         )}
-        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-4 md:gap-6">
-          <div className="w-full lg:w-2/3 order-2 lg:order-1">
+
+        <div className="flex flex-col lg:flex-row gap-8">
+          {/* Colonne jeu - prend plus de place sur grand écran */}
+          <div className="lg:flex-1 order-2 lg:order-1">
             <TrueNumberGame />
           </div>
-          <div className="w-full lg:w-1/3 order-1 lg:order-2">
-            <div className="bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20 shadow-2xl p-6 mb-4 md:mb-0">
-              <div className="flex flex-col sm:flex-row justify-between items-center mb-4 md:mb-6 space-y-2 sm:space-y-0">
-                <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-yellow-400 via-pink-400 to-purple-400 bg-clip-text text-transparent animate-pulse">Mon Profil</h1>
-                <button 
+
+          {/* Colonne profil - plus compacte */}
+          <div className="w-full lg:w-80 xl:w-96 order-1 lg:order-2">
+            <div className="bg-white/10 backdrop-blur-lg rounded-xl border border-white/20 shadow-lg p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h1 className="text-xl font-bold bg-gradient-to-r from-yellow-400 to-purple-400 bg-clip-text text-transparent">
+                  Mon Profil
+                </h1>
+                <button
                   onClick={handleLogout}
-                  className="px-3 py-1 md:px-4 md:py-2 bg-gradient-to-r from-yellow-400 to-pink-400 text-white rounded-2xl hover:shadow-2xl hover:shadow-yellow-400/50 transition-all duration-300 text-sm md:text-base"
+                  className="px-3 py-1 text-sm bg-gradient-to-r from-yellow-400 to-pink-400 text-white rounded-lg hover:shadow-lg transition-all"
                 >
                   Déconnexion
                 </button>
               </div>
-              <h2 className="text-lg md:text-xl font-bold text-white mb-4 md:mb-6">Informations</h2>
-              <div className="grid grid-cols-1 gap-3 md:gap-4 mb-4 md:mb-6">
-                <div>
-                  <label className="text-xs md:text-sm font-medium text-purple-200 mb-1 block">Prénom</label>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      name="firstName"
-                      value={editData.firstName}
-                      onChange={handleEditChange}
-                      className="w-full px-3 py-1 md:px-4 md:py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm md:text-base bg-white/30 text-gray-900 placeholder-gray-400"
-                    />
-                  ) : (
-                    <p className="text-white py-1 md:py-2 text-sm md:text-base">{profile.firstName}</p>
-                  )}
+
+              <div className="space-y-4">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
+                    {profile.firstName.charAt(0)}{profile.lastName.charAt(0)}
+                  </div>
+                  <div>
+                    <h2 className="font-medium text-white">
+                      {profile.firstName} {profile.lastName}
+                    </h2>
+                    <p className="text-sm text-purple-200">{profile.email}</p>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs md:text-sm font-medium text-purple-200 mb-1 block">Nom</label>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      name="lastName"
-                      value={editData.lastName}
-                      onChange={handleEditChange}
-                      className="w-full px-3 py-1 md:px-4 md:py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm md:text-base bg-white/30 text-gray-900 placeholder-gray-400"
-                    />
-                  ) : (
-                    <p className="text-white py-1 md:py-2 text-sm md:text-base">{profile.lastName}</p>
-                  )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-purple-200">Points</p>
+                    <p className="text-white font-medium">{profile.points}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-purple-200">Membre depuis</p>
+                    <p className="text-white font-medium">
+                      {new Date(profile.createdAt).toLocaleDateString('fr-FR')}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs md:text-sm font-medium text-purple-200 mb-1 block">Email</label>
-                  <p className="text-white py-1 md:py-2 text-sm md:text-base">{profile.email}</p>
-                </div>
-                <div>
-                  <label className="text-xs md:text-sm font-medium text-purple-200 mb-1 block">Téléphone</label>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      name="phone"
-                      value={editData.phone}
-                      onChange={handleEditChange}
-                      className="w-full px-3 py-1 md:px-4 md:py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm md:text-base bg-white/30 text-gray-900 placeholder-gray-400"
-                    />
-                  ) : (
-                    <p className="text-white py-1 md:py-2 text-sm md:text-base">{profile.phone}</p>
-                  )}
-                </div>
-                <div>
-                  <label className="text-xs md:text-sm font-medium text-purple-200 mb-1 block">Date d'inscription</label>
-                  <p className="text-white py-1 md:py-2 text-sm md:text-base">
-                    {new Date(profile.createdAt).toLocaleDateString('fr-FR')}
-                  </p>
+
+                <div className="pt-4 border-t border-white/10">
+                  <h3 className="text-sm font-medium text-purple-200 mb-3">Informations</h3>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-purple-200">Téléphone</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          name="phone"
+                          value={editData.phone}
+                          onChange={handleEditChange}
+                          className="w-full px-3 py-1 text-sm bg-white/20 border border-white/30 rounded focus:outline-none focus:ring-1 focus:ring-purple-400 text-white"
+                        />
+                      ) : (
+                        <p className="text-white">{profile.phone || '-'}</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
